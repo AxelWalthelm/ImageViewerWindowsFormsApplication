@@ -285,7 +285,7 @@ namespace ImageViewerWindowsFormsApplication
 
             if (hasImage && _transform.UpdateSizes(_image.Size, this.ClientSize))
             {
-                graphics.InterpolationMode = _transform.ZoomFactor < 1 || !_transform.ShowPixelBorders ? InterpolationMode.HighQualityBilinear : InterpolationMode.NearestNeighbor;
+                graphics.InterpolationMode = _transform.ZoomFactor < 2 || !_transform.ShowPixelBorders ? InterpolationMode.HighQualityBilinear : InterpolationMode.NearestNeighbor;
                 graphics.PixelOffsetMode = PixelOffsetMode.Half; // important for InterpolationMode.NearestNeighbor at high zoom in to draw all border pixels
                 graphics.DrawImage(_image, _transform.DstF, _transform.SrcF, GraphicsUnit.Pixel);
                 graphics.InterpolationMode = InterpolationMode.Bilinear;
@@ -331,7 +331,22 @@ namespace ImageViewerWindowsFormsApplication
         {
             if (e.Button == MouseButtons.Left)
             {
+                if (_transform.RelativeZoomFactor <= _transform.MinimumRelativeZoomFactor)
+                {
+                    _transform.Reset();
+                }
+                else
+                {
+                    Point clientPoint = PointToClient(this.PointToScreen(e.Location));
+                    _transform.AdjustRelativeZoom(0, clientPoint);
+                }
+
+                Invalidate();
+            }
+            else if (e.Button == MouseButtons.Right)
+            {
                 _transform.Reset();
+
                 Invalidate();
             }
         }
