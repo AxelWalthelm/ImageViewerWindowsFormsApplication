@@ -66,7 +66,7 @@ namespace ImageViewerWindowsFormsApplication
                     return new RectangleF((float)X, (float)Y, (float)Width, (float)Height);
                 }
 
-                public RectangleF ToInt()
+                public Rectangle ToInt()
                 {
                     int x0 = (int)Math.Round(X, MidpointRounding.AwayFromZero);
                     int y0 = (int)Math.Round(Y, MidpointRounding.AwayFromZero);
@@ -84,8 +84,34 @@ namespace ImageViewerWindowsFormsApplication
             public RectangleF SrcF => _src.ToFloat();
             public RectangleF DstF => _dst.ToFloat();
 
-            public RectangleF Src => _src.ToInt();
-            public RectangleF Dst => _dst.ToInt();
+            public Rectangle Src => _src.ToInt();
+            public Rectangle Dst => _dst.ToInt();
+
+            private RectangleD GetZoomAreaVisualizationD(double relativeSize, bool inside)
+            {
+                relativeSize = Math.Abs(relativeSize);
+
+                double size = relativeSize * Math.Min(_clientSize.Width, _clientSize.Height);
+                double border = Math.Max(5, 0.1 * size);
+
+                var outer = new RectangleD(border, border,
+                    _imageSize.Width >= _imageSize.Height ? size : size * _imageSize.Width / _imageSize.Height,
+                    _imageSize.Height >= _imageSize.Width ? size : size * _imageSize.Height / _imageSize.Width);
+
+                if (!inside)
+                    return outer;
+
+                double diameter = RelativeZoomFactor;
+                double radius = diameter * 0.5;
+                return new RectangleD(
+                    outer.X + outer.Width * (_relativeSrcCenterX - radius),
+                    outer.Y + outer.Height * (_relativeSrcCenterY - radius),
+                    outer.Width * diameter,
+                    outer.Height * diameter);
+            }
+
+            public RectangleF GetZoomAreaVisualizationF(double relativeSize, bool inside) => GetZoomAreaVisualizationD(relativeSize, inside).ToFloat();
+            public Rectangle GetZoomAreaVisualization(double relativeSize, bool inside) => GetZoomAreaVisualizationD(relativeSize, inside).ToInt();
 
             public bool UpdateSizes(Size imageSize, Size clientSize)
             {
@@ -215,6 +241,19 @@ namespace ImageViewerWindowsFormsApplication
             set { _transform.ShowPixelBorders = value; this.Invalidate(); }
         }
 
+        private const double _zoomAreaRelativeVisualizationSizeDefault = 0.2;
+        private double _zoomAreaRelativeVisualizationSize = _zoomAreaRelativeVisualizationSizeDefault;
+
+        [Browsable(true)]
+        [Category("Appearance")]
+        [Description("Relative size of zoom area visualization. Use 0 to turn it off.")]
+        [DefaultValue(_zoomAreaRelativeVisualizationSizeDefault)]
+        public double ZoomAreaRelativeVisualizationSize
+        {
+            get { return _zoomAreaRelativeVisualizationSize; }
+            set { _zoomAreaRelativeVisualizationSize = value; this.Invalidate(); }
+        }
+
         protected override void OnPaintBackground(PaintEventArgs pe)
         {
             Graphics graphics = pe.Graphics;
@@ -244,39 +283,42 @@ namespace ImageViewerWindowsFormsApplication
 
             ControlPaint.DrawBorder(graphics, this.ClientRectangle, color, ButtonBorderStyle.Dotted);
 
-            if (hasImage)
+            if (hasImage && _transform.UpdateSizes(_image.Size, this.ClientSize))
             {
-                _transform.UpdateSizes(_image.Size, this.ClientSize);
-
                 graphics.InterpolationMode = _transform.ZoomFactor < 1 || !_transform.ShowPixelBorders ? InterpolationMode.HighQualityBilinear : InterpolationMode.NearestNeighbor;
                 graphics.PixelOffsetMode = PixelOffsetMode.Half; // important for InterpolationMode.NearestNeighbor at high zoom in to draw all border pixels
                 graphics.DrawImage(_image, _transform.DstF, _transform.SrcF, GraphicsUnit.Pixel);
                 graphics.InterpolationMode = InterpolationMode.Bilinear;
                 graphics.PixelOffsetMode = PixelOffsetMode.Default;
-            }
 
-            //var r1 = this.ClientRectangle;
-            //var r2 = r1;
-            //r1.Inflate(-5, -5);
-            //ControlPaint.DrawSelectionFrame(graphics, isActive, r2, r1, this.BackColor);
+                if (_zoomAreaRelativeVisualizationSize > 0 && _transform.RelativeZoomFactor < 1)
+                {
+                    var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, false);
+                    var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, true);
+
+                    using (var backPen = new Pen(this.BackColor, 5))
+                    using (var forePen = new Pen(this.ForeColor, 1))
+                    {
+                        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+                        graphics.DrawRectangle(backPen, outer.X, outer.Y, outer.Width, outer.Height);
+                        graphics.DrawRectangle(backPen, inner.X, inner.Y, inner.Width, inner.Height);
+
+                        graphics.DrawRectangle(forePen, outer.X, outer.Y, outer.Width, outer.Height);
+                        graphics.DrawRectangle(forePen, inner.X, inner.Y, inner.Width, inner.Height);
+
+                        graphics.SmoothingMode = SmoothingMode.None;
+                    }
+                }
+            }
 
             if (!hasImage)
             {
-                //using (var pen = new Pen(color))
-                //{
-                //    graphics.DrawRectangle(pen, new Rectangle(0, 0, this.Width - 1, this.Height - 1));
-                //}
-
                 using (var brush = new SolidBrush(color))
                 using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
                     graphics.DrawString(this.Text, this.Font, brush, this.ClientRectangle, format);
                 }
-
-                //using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
-                //{
-                //    ControlPaint.DrawStringDisabled(graphics, this.Text, this.Font, this.ForeColor, this.ClientRectangle, format);
-                //}
             }
         }
 
