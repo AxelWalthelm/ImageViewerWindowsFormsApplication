@@ -16,6 +16,10 @@ namespace ImageViewerWindowsFormsApplication
         {
             InitializeComponent();
             checkBox1_CheckedChanged(this, new EventArgs());
+
+            Image image = Image.FromFile(@"C:\Users\Axel\Pictures\test.png");
+            this.pictureBox1.Image = image;
+            this.imageZoomView1.Image = image;
         }
 
         private void buttonOpen_Click(object sender, EventArgs e)
