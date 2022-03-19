@@ -26,7 +26,7 @@ namespace ImageViewerWindowsFormsApplication
 
         private class Transform
         {
-            private double _relativeZoomFactorRaw = 1.0; // [0,1] 1: full image; 0: maximum zoom in (special value, see also RelativeZoomFactor); width/height of relative rectangle
+            private double _relativeZoomFactorRaw = 1.0; // [0,1] 1: full image; 0: maximum zoom in (special value, see also RelativeZoomFactor)
             private double _relativeSrcCenterX = 0.5; // [0,1] 0.5: centered
             private double _relativeSrcCenterY = 0.5; // [0,1] 0.5: centered
 
@@ -159,16 +159,16 @@ namespace ImageViewerWindowsFormsApplication
                 return true;
             }
 
-            private double Relative2SrcX(double relativeX) => _src.X + relativeX * (_src.Width - 1);
-            private double Relative2SrcY(double relativeY) => _src.Y + relativeY * (_src.Height - 1);
-
-            private double Src2RelativeX(double srcX) => (srcX - _src.X) / (_src.Width - 1);
-            private double Src2RelativeY(double srcY) => (srcY - _src.Y) / (_src.Height - 1);
-
             public void AdjustRelativeZoom(double newRelativeZoomFactor, Point clientFocus)
             {
                 UpdateRelativeZoom(newRelativeZoomFactor, clientFocus.X / (double)(_clientSize.Width - 1), clientFocus.Y / (double)(_clientSize.Height - 1));
             }
+
+            private double SrcRelative2AbsoluteX(double relativeX) => _src.X + relativeX * (_src.Width - 1);
+            private double SrcRelative2AbsoluteY(double relativeY) => _src.Y + relativeY * (_src.Height - 1);
+
+            private double SrcAbsolute2RelativeX(double srcX) => (srcX - _src.X) / (_src.Width - 1);
+            private double SrcAbsolute2RelativeY(double srcY) => (srcY - _src.Y) / (_src.Height - 1);
 
             public void UpdateRelativeZoom(double newRelativeZoomFactor, double relativeFocusX, double relativeFocusY)
             {
@@ -182,15 +182,15 @@ namespace ImageViewerWindowsFormsApplication
                     return;
 
                 UpdateAbsolute(); // may be redundant, but let's make sure _src is up to date
-                double focusSrcX = Relative2SrcX(relativeFocusX);
-                double focusSrcY = Relative2SrcY(relativeFocusY);
+                double focusSrcX = SrcRelative2AbsoluteX(relativeFocusX);
+                double focusSrcY = SrcRelative2AbsoluteY(relativeFocusY);
 
                 _relativeZoomFactorRaw = newRelativeZoomFactor;
                 UpdateAbsolute();
 
                 // adust _relativeSrcCenterX/Y so that src pixel at relativeFocusX/Y stays at the same client position
 
-                // Src2RelativeX(focusSrcX) = relativeFocusX
+                // SrcAbsolute2RelativeX(focusSrcX) = relativeFocusX
                 // (focusSrcX - _src.X) / (_src.Width - 1) = relativeFocusX
                 //   _src.X = srcCenterX - (_src.Width - 1) * 0.5
                 // (focusSrcX - srcCenterX + (_src.Width - 1) * 0.5) / (_src.Width - 1) = relativeFocusX
@@ -210,6 +210,21 @@ namespace ImageViewerWindowsFormsApplication
             {
                 _relativeSrcCenterX += dX * RelativeZoomFactor;
                 _relativeSrcCenterY += dY * RelativeZoomFactor;
+                LimitRelativeSrcCenter();
+
+                UpdateAbsolute();
+            }
+
+            public void UpdateRelativeMoveFromClientMove(int clientPixelX, int clientPixelY)
+            {
+                UpdateAbsolute();
+
+                // convert client to relative
+                double dX = clientPixelX / (_zoomFactor * (_imageSize.Width - 1));
+                double dY = clientPixelY / (_zoomFactor * (_imageSize.Height - 1));
+
+                _relativeSrcCenterX -= dX;
+                _relativeSrcCenterY -= dY;
                 LimitRelativeSrcCenter();
 
                 UpdateAbsolute();
@@ -403,6 +418,44 @@ namespace ImageViewerWindowsFormsApplication
                 Math.Min(Math.Max((int)(color1.R * weight1 + color2.R * weight2), 0), 255),
                 Math.Min(Math.Max((int)(color1.G * weight1 + color2.G * weight2), 0), 255),
                 Math.Min(Math.Max((int)(color1.B * weight1 + color2.B * weight2), 0), 255));
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            TrackDragMouse(e);
+
+            base.OnMouseDown(e);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            TrackDragMouse(e);
+
+            base.OnMouseMove(e);
+        }
+
+        private Point? _dragLeftMousePosition;
+
+        private void TrackDragMouse(MouseEventArgs e)
+        {
+            if ((e.Button & MouseButtons.Left) != 0)
+            {
+                if (_dragLeftMousePosition.HasValue)
+                {
+                    // move zoom location
+                    _transform.UpdateRelativeMoveFromClientMove(
+                        e.Location.X - _dragLeftMousePosition.Value.X,
+                        e.Location.Y - _dragLeftMousePosition.Value.Y);
+
+                    this.Invalidate();
+                }
+
+                _dragLeftMousePosition = e.Location;
+            }
+            else
+            {
+                _dragLeftMousePosition = null;
+            }
         }
 
         protected override void OnMouseClick(MouseEventArgs e)
