@@ -11,6 +11,11 @@ using System.Windows.Forms;
 
 namespace ImageViewerWindowsFormsApplication
 {
+    // Display an image similar to PictureBox but allows interactive zoom operations to view parts of the image enlarged.
+    // Always shows image as large as possible, but to preserve aspect ratio some empty border regions may be displayed.
+    // Resizing the control will try to keep center of image visible and adjusts zoom settings accordingly.
+    // When a new image is set, the control tries to preserve zoom settings;
+    // if the new image has different size, zoom settings are adjusted to show a similar region of the image.
     [ToolboxItem(true)]
     //[ToolboxItemFilter("System.Windows.Forms", ToolboxItemFilterType.Custom)]
     [ToolboxBitmap(typeof(PictureBox))]
@@ -45,9 +50,11 @@ namespace ImageViewerWindowsFormsApplication
 
             public double MaximumPixelSize = _maximumPixelSizeDefault;
 
-            public double MinimumRelativeZoomFactor => _imageSize.Width <= 0 || _imageSize.Height <= 0 ? 0 : Math.Min(
+            public double NeutralRelativeZoomFactor => _imageSize.Width <= 0 || _imageSize.Height <= 0 ? 0 : Math.Min(
                     _clientSize.Width / (double)_imageSize.Width,
-                    _clientSize.Height / (double)_imageSize.Height) / MaximumPixelSize;
+                    _clientSize.Height / (double)_imageSize.Height);
+
+            public double MinimumRelativeZoomFactor => NeutralRelativeZoomFactor / MaximumPixelSize;
 
             private struct RectangleD
             {
@@ -87,31 +94,46 @@ namespace ImageViewerWindowsFormsApplication
             public Rectangle Src => _src.ToInt();
             public Rectangle Dst => _dst.ToInt();
 
-            private RectangleD GetZoomAreaVisualizationD(double relativeSize, bool inside)
+            public enum ZoomAreaVisualization
+            {
+                Zoom, Client, Image
+            }
+
+            private RectangleD GetZoomAreaVisualizationD(double relativeSize, ZoomAreaVisualization area)
             {
                 relativeSize = Math.Abs(relativeSize);
 
                 double size = relativeSize * Math.Min(_clientSize.Width, _clientSize.Height);
                 double border = Math.Max(5, 0.1 * size);
 
-                var outer = new RectangleD(border, border,
-                    _imageSize.Width >= _imageSize.Height ? size : size * _imageSize.Width / _imageSize.Height,
-                    _imageSize.Height >= _imageSize.Width ? size : size * _imageSize.Height / _imageSize.Width);
+                var clientArea = new RectangleD(border, border,
+                    _clientSize.Width >= _clientSize.Height ? size : size * _clientSize.Width / _clientSize.Height,
+                    _clientSize.Height >= _clientSize.Width ? size : size * _clientSize.Height / _clientSize.Width);
 
-                if (!inside)
-                    return outer;
+                if (area == ZoomAreaVisualization.Client)
+                    return clientArea;
 
-                double diameter = RelativeZoomFactor;
-                double radius = diameter * 0.5;
+                //double aspect = (_imageSize.Width / _imageSize.Height) / (_clientSize.Width / _clientSize.Height);
+                double aspect = (_imageSize.Width * (double)_clientSize.Height) / (_imageSize.Height * (double)_clientSize.Width);
+                RectangleD imageArea =
+                    aspect < 1
+                    ? new RectangleD(clientArea.X + clientArea.Width * (1 - aspect) * 0.5, clientArea.Y, clientArea.Width * aspect, clientArea.Height)
+                    : new RectangleD(clientArea.X, clientArea.Y + clientArea.Height * (1 - 1 / aspect) * 0.5, clientArea.Width, clientArea.Height / aspect);
+
+                if (area == ZoomAreaVisualization.Image)
+                    return imageArea;
+
+                double factorX = imageArea.Width / _imageSize.Width;
+                double factorY = imageArea.Height / _imageSize.Height;
                 return new RectangleD(
-                    outer.X + outer.Width * (_relativeSrcCenterX - radius),
-                    outer.Y + outer.Height * (_relativeSrcCenterY - radius),
-                    outer.Width * diameter,
-                    outer.Height * diameter);
+                    imageArea.X + _src.X * factorX,
+                    imageArea.Y + _src.Y * factorY,
+                    _src.Width * factorX,
+                    _src.Height * factorY);
             }
 
-            public RectangleF GetZoomAreaVisualizationF(double relativeSize, bool inside) => GetZoomAreaVisualizationD(relativeSize, inside).ToFloat();
-            public Rectangle GetZoomAreaVisualization(double relativeSize, bool inside) => GetZoomAreaVisualizationD(relativeSize, inside).ToInt();
+            public RectangleF GetZoomAreaVisualizationF(double relativeSize, ZoomAreaVisualization area) => GetZoomAreaVisualizationD(relativeSize, area).ToFloat();
+            public Rectangle GetZoomAreaVisualization(double relativeSize, ZoomAreaVisualization area) => GetZoomAreaVisualizationD(relativeSize, area).ToInt();
 
             public bool UpdateSizes(Size imageSize, Size clientSize)
             {
@@ -126,9 +148,7 @@ namespace ImageViewerWindowsFormsApplication
                 if (_imageSize.Width <= 0 || _imageSize.Height <= 0 || _clientSize.Width <= 0 || _clientSize.Height <= 0)
                     return false;
 
-                _zoomFactor = Math.Min(
-                    _clientSize.Width / (double)_imageSize.Width,
-                    _clientSize.Height / (double)_imageSize.Height) / RelativeZoomFactor;
+                _zoomFactor = NeutralRelativeZoomFactor / RelativeZoomFactor;
                 double srcCenterX = _relativeSrcCenterX * (_imageSize.Width - 1);
                 double srcCenterY = _relativeSrcCenterY * (_imageSize.Height - 1);
                 double w = _clientSize.Width / _zoomFactor;
@@ -181,6 +201,23 @@ namespace ImageViewerWindowsFormsApplication
                 _relativeSrcCenterY = (focusSrcY + (0.5 - relativeFocusY) * (_src.Height - 1)) / (_imageSize.Height - 1);
 
                 // adust _relativeSrcCenterX/Y so that displayed image does not move outside of client area when zooming out
+                LimitRelativeSrcCenter();
+
+                UpdateAbsolute();
+            }
+
+            public void UpdateRelativeMove(double dX, double dY)
+            {
+                _relativeSrcCenterX += dX * RelativeZoomFactor;
+                _relativeSrcCenterY += dY * RelativeZoomFactor;
+                LimitRelativeSrcCenter();
+
+                UpdateAbsolute();
+            }
+
+            // adust _relativeSrcCenterX/Y so that displayed image does not move outside of client area
+            private void LimitRelativeSrcCenter()
+            {
                 double radius = RelativeZoomFactor * 0.5;
                 if (_relativeSrcCenterX < radius)
                     _relativeSrcCenterX = radius;
@@ -193,8 +230,6 @@ namespace ImageViewerWindowsFormsApplication
                 else
                 if (_relativeSrcCenterY > 1 - radius)
                     _relativeSrcCenterY = 1 - radius;
-
-                UpdateAbsolute();
             }
         }
 
@@ -254,6 +289,18 @@ namespace ImageViewerWindowsFormsApplication
             set { _zoomAreaRelativeVisualizationSize = value; this.Invalidate(); }
         }
 
+        private bool _showZoomFactor;
+
+        [Browsable(true)]
+        [Category("Appearance")]
+        [Description("Display numeric zoom value.")]
+        [DefaultValue(false)]
+        public bool ShowZoomFactor
+        {
+            get { return _showZoomFactor; }
+            set { _showZoomFactor = value; this.Invalidate(); }
+        }
+
         protected override void OnPaintBackground(PaintEventArgs pe)
         {
             Graphics graphics = pe.Graphics;
@@ -291,24 +338,51 @@ namespace ImageViewerWindowsFormsApplication
                 graphics.InterpolationMode = InterpolationMode.Bilinear;
                 graphics.PixelOffsetMode = PixelOffsetMode.Default;
 
-                if (_zoomAreaRelativeVisualizationSize > 0 && _transform.RelativeZoomFactor < 1)
+                if (_zoomAreaRelativeVisualizationSize > 0 && (_transform.RelativeZoomFactor < 1 || ShowZoomFactor && _transform.ZoomFactor > 0))
                 {
-                    var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, false);
-                    var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, true);
+                    var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Client);
+                    var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
+                    var image = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Image);
 
                     using (var backPen = new Pen(this.BackColor, 5))
                     using (var forePen = new Pen(this.ForeColor, 1))
+                    using (var palePen = new Pen(MiddleColor(this.BackColor, this.ForeColor, 0.2), 1))
                     {
                         graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
                         graphics.DrawRectangle(backPen, outer.X, outer.Y, outer.Width, outer.Height);
                         graphics.DrawRectangle(backPen, inner.X, inner.Y, inner.Width, inner.Height);
+                        graphics.DrawRectangle(backPen, image.X, image.Y, image.Width, image.Height);
 
-                        graphics.DrawRectangle(forePen, outer.X, outer.Y, outer.Width, outer.Height);
+                        graphics.DrawRectangle(palePen, outer.X, outer.Y, outer.Width, outer.Height);
                         graphics.DrawRectangle(forePen, inner.X, inner.Y, inner.Width, inner.Height);
+                        graphics.DrawRectangle(forePen, image.X, image.Y, image.Width, image.Height);
 
                         graphics.SmoothingMode = SmoothingMode.None;
                     }
+                }
+            }
+
+            if (ShowZoomFactor && _transform.ZoomFactor > 0)
+            {
+                Rectangle displayArea = this.ClientRectangle;
+                displayArea.Inflate(-5, -5);
+
+                using (var foreBrush = new SolidBrush(this.ForeColor))
+                using (var backBrush = new SolidBrush(this.BackColor))
+                using (var format = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Near })
+                {
+                    string to = "\u2009:\u2009"; // 0x2009 is narrow space
+                    string text = _transform.ZoomFactor > 1 ? $"{_transform.ZoomFactor:0.##}{to}1" : $"1{to}{1 / _transform.ZoomFactor:0.##}";
+                    foreach (var offset in new[] {
+                            new Point(1, 1), new Point(1, -1), new Point(-1, 1), new Point(-1, -1),
+                            new Point(-1, 0), new Point(1, 0), new Point(0, 1), new Point(0, -1) })
+                    {
+                        Rectangle r = displayArea;
+                        r.Offset(offset);
+                        graphics.DrawString(text, this.Font, backBrush, r, format);
+                    }
+                    graphics.DrawString(text, this.Font, foreBrush, displayArea, format);
                 }
             }
 
@@ -322,23 +396,43 @@ namespace ImageViewerWindowsFormsApplication
             }
         }
 
+        private static Color MiddleColor(Color color1, Color color2, double weight2 = 0.5)
+        {
+            double weight1 = 1 - weight2;
+            return Color.FromArgb(
+                Math.Min(Math.Max((int)(color1.R * weight1 + color2.R * weight2), 0), 255),
+                Math.Min(Math.Max((int)(color1.G * weight1 + color2.G * weight2), 0), 255),
+                Math.Min(Math.Max((int)(color1.B * weight1 + color2.B * weight2), 0), 255));
+        }
+
         protected override void OnMouseClick(MouseEventArgs e)
         {
+            base.OnMouseClick(e);
+
             this.Focus();
         }
 
         protected override void OnMouseDoubleClick(MouseEventArgs e)
         {
+            base.OnMouseDoubleClick(e);
+
+            this.Focus();
+
             if (e.Button == MouseButtons.Left)
             {
                 if (_transform.RelativeZoomFactor <= _transform.MinimumRelativeZoomFactor)
                 {
                     _transform.Reset();
                 }
-                else
+                else if (_transform.RelativeZoomFactor <= _transform.NeutralRelativeZoomFactor)
                 {
                     Point clientPoint = PointToClient(this.PointToScreen(e.Location));
                     _transform.AdjustRelativeZoom(0, clientPoint);
+                }
+                else
+                {
+                    Point clientPoint = PointToClient(this.PointToScreen(e.Location));
+                    _transform.AdjustRelativeZoom(_transform.NeutralRelativeZoomFactor, clientPoint);
                 }
 
                 Invalidate();
@@ -353,24 +447,192 @@ namespace ImageViewerWindowsFormsApplication
 
         protected override void OnMouseWheel(MouseEventArgs mea)
         {
+            base.OnMouseWheel(mea);
+
+            this.FindForm()?.Activate();
             this.Focus();
 
             if (mea.Delta != 0)
             {
                 Point clientPoint = PointToClient(this.PointToScreen(mea.Location));
-                ZoomScroll(clientPoint, mea.Delta > 0);
+                ZoomScroll(clientPoint, mea.Delta > 0, ModifierKeys);
                 Invalidate();
             }
         }
 
-        private void ZoomScroll(Point focus, bool zoomIn)
+        protected override void OnPreviewKeyDown(PreviewKeyDownEventArgs e)
+        {
+            switch (e.KeyCode)
+            {
+                case Keys.Down:
+                case Keys.Up:
+                case Keys.Left:
+                case Keys.Right:
+                    e.IsInputKey = true;
+                    break;
+            }
+
+            base.OnPreviewKeyDown(e);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            switch (e.KeyCode)
+            {
+                case Keys.Escape:
+                case Keys.D0:
+                case Keys.NumPad0:
+                    _transform.Reset();
+                    Invalidate();
+                    e.Handled = true;
+                    break;
+
+                case Keys.D1:
+                case Keys.D2:
+                case Keys.D3:
+                case Keys.D4:
+                case Keys.D5:
+                case Keys.D6:
+                case Keys.D7:
+                case Keys.D8:
+                case Keys.D9:
+                case Keys.NumPad1:
+                case Keys.NumPad2:
+                case Keys.NumPad3:
+                case Keys.NumPad4:
+                case Keys.NumPad5:
+                case Keys.NumPad6:
+                case Keys.NumPad7:
+                case Keys.NumPad8:
+                case Keys.NumPad9:
+                    int digit = Math.Min(Math.Max(e.KeyCode <= Keys.D9 ? e.KeyCode - Keys.D0 : e.KeyCode - Keys.NumPad0, 0), 9);
+                    double min = _transform.MinimumRelativeZoomFactor;
+                    // newRelativeZoomFactor = stepIn^(digit / -9.0)
+                    // if digit = 9 then newRelativeZoomFactor = min
+                    // min = stepIn^(-1)
+                    // stepIn = 1 / min
+                    double newRelativeZoomFactor = digit == 9 ? 0 : Math.Pow(1 / min, digit / -9.0);
+                    _transform.UpdateRelativeZoom(newRelativeZoomFactor, 0.5, 0.5);
+                    Invalidate();
+                    e.Handled = true;
+                    break;
+
+                case Keys.Home:
+                    if (_transform.RelativeZoomFactor < _transform.NeutralRelativeZoomFactor)
+                    {
+                        _transform.UpdateRelativeZoom(_transform.NeutralRelativeZoomFactor, 0.5, 0.5);
+                    }
+                    else
+                    {
+                        _transform.Reset();
+                    }
+                    Invalidate();
+                    e.Handled = true;
+                    break;
+
+                case Keys.Space:
+                case Keys.End:
+                    if (_transform.RelativeZoomFactor > _transform.NeutralRelativeZoomFactor)
+                    {
+                        _transform.UpdateRelativeZoom(_transform.NeutralRelativeZoomFactor, 0.5, 0.5);
+                    }
+                    else
+                    {
+                        _transform.UpdateRelativeZoom(0, 0.5, 0.5);
+                    }
+                    Invalidate();
+                    e.Handled = true;
+                    break;
+
+                case Keys.Enter:
+                case Keys.PageDown:
+                case Keys.Oemplus:
+                case Keys.Add:
+                case Keys.Q:
+                    ZoomStep(1, e.Modifiers);
+                    Invalidate();
+                    e.Handled = true;
+                    break;
+
+                case Keys.Back:
+                case Keys.PageUp:
+                case Keys.OemMinus:
+                case Keys.Subtract:
+                case Keys.E:
+                case Keys.Control | Keys.Down:
+                case Keys.Control | Keys.Left:
+                    ZoomStep(-1, e.Modifiers);
+                    Invalidate();
+                    e.Handled = true;
+                    break;
+
+                case Keys.Up:
+                case Keys.W:
+                    ZoomMove(0, -1, e.Modifiers);
+                    Invalidate();
+                    break;
+
+                case Keys.Down:
+                case Keys.S:
+                    ZoomMove(0, 1, e.Modifiers);
+                    Invalidate();
+                    break;
+
+                case Keys.Left:
+                case Keys.A:
+                    ZoomMove(-1, 0, e.Modifiers);
+                    Invalidate();
+                    break;
+
+                case Keys.Right:
+                case Keys.D:
+                    ZoomMove(1, 0, e.Modifiers);
+                    Invalidate();
+                    break;
+            }
+
+            base.OnKeyDown(e);
+        }
+
+        private void ZoomScroll(Point focus, bool zoomIn, Keys modifiers)
         {
             if (!_transform.UpdateSizes(_image.Size, this.ClientSize))
                 return;
 
-            double newRelativeZoomFactor = _transform.RelativeZoomFactor * (zoomIn ? 1 / _scrollZoomFactor : _scrollZoomFactor);
+            double stepFactor = GetZoomSpeed(zoomIn ? 1 : -1, modifiers);
+            double newRelativeZoomFactor = _transform.RelativeZoomFactor * stepFactor;
 
             _transform.AdjustRelativeZoom(newRelativeZoomFactor, focus);
+        }
+
+        private double GetSpeed(Keys modifiers, double slow, double normal, double fast)
+        {
+            if ((modifiers & Keys.Control) != 0)
+                return fast;
+            if ((modifiers & Keys.Shift) != 0)
+                return slow;
+            return normal;
+        }
+
+        private double GetMoveSpeed(Keys modifiers) => GetSpeed(modifiers, 0.05, 0.5, 0.9);
+
+        private double GetZoomSpeed(double stepIn, Keys modifiers) => Math.Pow(_scrollZoomFactor, stepIn * -GetSpeed(modifiers, 0.25, 1, 4));
+
+        private void ZoomStep(double stepIn, Keys modifiers)
+        {
+            double stepFactor = GetZoomSpeed(stepIn, modifiers);
+            double newRelativeZoomFactor = _transform.RelativeZoomFactor * stepFactor;
+            _transform.UpdateRelativeZoom(newRelativeZoomFactor, 0.5, 0.5);
+        }
+
+        private void ZoomMove(double dX, double dY, Keys modifiers)
+        {
+            // if we are fully zoomed out move would have no effect => zoom in a bit
+            if (_transform.RelativeZoomFactor >= 1)
+                _transform.UpdateRelativeZoom(0.5, 0.5, 0.5);
+
+            double speed = GetMoveSpeed(modifiers);
+            _transform.UpdateRelativeMove(dX * speed, dY * speed);
         }
     }
 }

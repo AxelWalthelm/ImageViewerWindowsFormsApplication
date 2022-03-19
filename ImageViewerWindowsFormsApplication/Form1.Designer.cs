@@ -32,6 +32,7 @@
             this.buttonOpen = new System.Windows.Forms.Button();
             this.checkBox1 = new System.Windows.Forms.CheckBox();
             this.textBox1 = new System.Windows.Forms.TextBox();
+            this.buttonClear = new System.Windows.Forms.Button();
             this.imageZoomView1 = new ImageViewerWindowsFormsApplication.ImageZoomView();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.SuspendLayout();
@@ -51,7 +52,7 @@
             this.buttonOpen.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
             this.buttonOpen.Location = new System.Drawing.Point(172, 13);
             this.buttonOpen.Name = "buttonOpen";
-            this.buttonOpen.Size = new System.Drawing.Size(100, 23);
+            this.buttonOpen.Size = new System.Drawing.Size(78, 23);
             this.buttonOpen.TabIndex = 1;
             this.buttonOpen.Text = "Open...";
             this.buttonOpen.UseVisualStyleBackColor = true;
@@ -63,7 +64,7 @@
             this.checkBox1.Location = new System.Drawing.Point(172, 43);
             this.checkBox1.Name = "checkBox1";
             this.checkBox1.Size = new System.Drawing.Size(100, 17);
-            this.checkBox1.TabIndex = 2;
+            this.checkBox1.TabIndex = 3;
             this.checkBox1.Text = "smooth pixel";
             this.checkBox1.UseVisualStyleBackColor = true;
             this.checkBox1.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
@@ -74,7 +75,18 @@
             this.textBox1.Location = new System.Drawing.Point(172, 67);
             this.textBox1.Name = "textBox1";
             this.textBox1.Size = new System.Drawing.Size(100, 20);
-            this.textBox1.TabIndex = 3;
+            this.textBox1.TabIndex = 4;
+            // 
+            // buttonClear
+            // 
+            this.buttonClear.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.buttonClear.Location = new System.Drawing.Point(249, 13);
+            this.buttonClear.Name = "buttonClear";
+            this.buttonClear.Size = new System.Drawing.Size(23, 23);
+            this.buttonClear.TabIndex = 2;
+            this.buttonClear.Text = "X";
+            this.buttonClear.UseVisualStyleBackColor = true;
+            this.buttonClear.Click += new System.EventHandler(this.buttonClear_Click);
             // 
             // imageZoomView1
             // 
@@ -85,6 +97,7 @@
             this.imageZoomView1.Image = null;
             this.imageZoomView1.Location = new System.Drawing.Point(13, 13);
             this.imageZoomView1.Name = "imageZoomView1";
+            this.imageZoomView1.ShowZoomFactor = true;
             this.imageZoomView1.Size = new System.Drawing.Size(153, 236);
             this.imageZoomView1.TabIndex = 0;
             this.imageZoomView1.Text = "No Image";
@@ -96,12 +109,13 @@
             this.ClientSize = new System.Drawing.Size(284, 261);
             this.Controls.Add(this.textBox1);
             this.Controls.Add(this.checkBox1);
+            this.Controls.Add(this.buttonClear);
             this.Controls.Add(this.buttonOpen);
             this.Controls.Add(this.pictureBox1);
             this.Controls.Add(this.imageZoomView1);
             this.Name = "Form1";
             this.SizeGripStyle = System.Windows.Forms.SizeGripStyle.Show;
-            this.Text = "Form1";
+            this.Text = "ImageZoomView – Test Application";
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -115,6 +129,7 @@
         private System.Windows.Forms.Button buttonOpen;
         private System.Windows.Forms.CheckBox checkBox1;
         private System.Windows.Forms.TextBox textBox1;
+        private System.Windows.Forms.Button buttonClear;
     }
 }
 

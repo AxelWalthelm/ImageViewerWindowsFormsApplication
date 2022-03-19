@@ -5,6 +5,7 @@ using System.Data;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -17,9 +18,9 @@ namespace ImageViewerWindowsFormsApplication
             InitializeComponent();
             checkBox1_CheckedChanged(this, new EventArgs());
 
-            Image image = Image.FromFile(@"C:\Users\Axel\Pictures\test.png");
-            this.pictureBox1.Image = image;
-            this.imageZoomView1.Image = image;
+#if true
+            SetImage(@"C:\Users\Axel\Pictures\test.png");
+#endif
         }
 
         private void buttonOpen_Click(object sender, EventArgs e)
@@ -31,11 +32,25 @@ namespace ImageViewerWindowsFormsApplication
 
                 if (dlg.ShowDialog() == DialogResult.OK)
                 {
-                    Image image = Image.FromFile(dlg.FileName);
-                    this.pictureBox1.Image = image;
-                    this.imageZoomView1.Image = image;
+                    string fileName = dlg.FileName;
+                    SetImage(fileName);
                 }
             }
+        }
+
+        private void SetImage(string fileName)
+        {
+            this.Text = Regex.Replace(this.Text, @"(?<=\s\p{Pd}\s).*$", "") + fileName;
+
+            Image image = Image.FromFile(fileName);
+            this.pictureBox1.Image = image;
+            this.imageZoomView1.Image = image;
+        }
+
+        private void buttonClear_Click(object sender, EventArgs e)
+        {
+            this.pictureBox1.Image = null;
+            this.imageZoomView1.Image = null;
         }
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
