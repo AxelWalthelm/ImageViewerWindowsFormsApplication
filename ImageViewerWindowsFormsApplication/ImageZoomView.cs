@@ -531,6 +531,8 @@ namespace ImageViewerWindowsFormsApplication
                         // limit cursor movement to image area
                         Cursor.Clip = this.RectangleToScreen(r0);
                     }
+                    // set move cursor
+                    Cursor.Current = Cursors.SizeAll;
 
                     this.Invalidate();
                 }
@@ -543,6 +545,8 @@ namespace ImageViewerWindowsFormsApplication
 
                 // release any limitation of cursor movement
                 Cursor.Clip = new Rectangle();
+                // unset move cursor
+                Cursor.Current = Cursors.Default;
 
                 this.Invalidate();
             }
