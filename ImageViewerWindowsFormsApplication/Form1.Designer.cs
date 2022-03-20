@@ -30,9 +30,9 @@
         {
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this.buttonOpen = new System.Windows.Forms.Button();
-            this.checkBox1 = new System.Windows.Forms.CheckBox();
-            this.textBox1 = new System.Windows.Forms.TextBox();
+            this.checkBoxSmoothPixel = new System.Windows.Forms.CheckBox();
             this.buttonClear = new System.Windows.Forms.Button();
+            this.comboBoxVisualizationMode = new System.Windows.Forms.ComboBox();
             this.imageZoomView1 = new ImageViewerWindowsFormsApplication.ImageZoomView();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             this.SuspendLayout();
@@ -58,24 +58,16 @@
             this.buttonOpen.UseVisualStyleBackColor = true;
             this.buttonOpen.Click += new System.EventHandler(this.buttonOpen_Click);
             // 
-            // checkBox1
+            // checkBoxSmoothPixel
             // 
-            this.checkBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.checkBox1.Location = new System.Drawing.Point(172, 43);
-            this.checkBox1.Name = "checkBox1";
-            this.checkBox1.Size = new System.Drawing.Size(100, 17);
-            this.checkBox1.TabIndex = 3;
-            this.checkBox1.Text = "smooth pixel";
-            this.checkBox1.UseVisualStyleBackColor = true;
-            this.checkBox1.CheckedChanged += new System.EventHandler(this.checkBox1_CheckedChanged);
-            // 
-            // textBox1
-            // 
-            this.textBox1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
-            this.textBox1.Location = new System.Drawing.Point(172, 67);
-            this.textBox1.Name = "textBox1";
-            this.textBox1.Size = new System.Drawing.Size(100, 20);
-            this.textBox1.TabIndex = 4;
+            this.checkBoxSmoothPixel.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.checkBoxSmoothPixel.Location = new System.Drawing.Point(172, 70);
+            this.checkBoxSmoothPixel.Name = "checkBoxSmoothPixel";
+            this.checkBoxSmoothPixel.Size = new System.Drawing.Size(100, 17);
+            this.checkBoxSmoothPixel.TabIndex = 4;
+            this.checkBoxSmoothPixel.Text = "smooth pixel";
+            this.checkBoxSmoothPixel.UseVisualStyleBackColor = true;
+            this.checkBoxSmoothPixel.CheckedChanged += new System.EventHandler(this.checkBoxSmoothPixel_CheckedChanged);
             // 
             // buttonClear
             // 
@@ -87,6 +79,17 @@
             this.buttonClear.Text = "X";
             this.buttonClear.UseVisualStyleBackColor = true;
             this.buttonClear.Click += new System.EventHandler(this.buttonClear_Click);
+            // 
+            // comboBoxVisualizationMode
+            // 
+            this.comboBoxVisualizationMode.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Right)));
+            this.comboBoxVisualizationMode.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.comboBoxVisualizationMode.FormattingEnabled = true;
+            this.comboBoxVisualizationMode.Location = new System.Drawing.Point(172, 43);
+            this.comboBoxVisualizationMode.Name = "comboBoxVisualizationMode";
+            this.comboBoxVisualizationMode.Size = new System.Drawing.Size(100, 21);
+            this.comboBoxVisualizationMode.TabIndex = 3;
+            this.comboBoxVisualizationMode.SelectedIndexChanged += new System.EventHandler(this.comboBoxVisualizationMode_SelectedIndexChanged);
             // 
             // imageZoomView1
             // 
@@ -100,15 +103,15 @@
             this.imageZoomView1.Size = new System.Drawing.Size(153, 236);
             this.imageZoomView1.TabIndex = 0;
             this.imageZoomView1.Text = "No Image";
-            this.imageZoomView1.ZoomScaleVisualization = true;
+            this.imageZoomView1.Paint += new System.Windows.Forms.PaintEventHandler(this.imageZoomView1_Paint);
             // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(284, 261);
-            this.Controls.Add(this.textBox1);
-            this.Controls.Add(this.checkBox1);
+            this.Controls.Add(this.comboBoxVisualizationMode);
+            this.Controls.Add(this.checkBoxSmoothPixel);
             this.Controls.Add(this.buttonClear);
             this.Controls.Add(this.buttonOpen);
             this.Controls.Add(this.pictureBox1);
@@ -118,7 +121,6 @@
             this.Text = "ImageZoomView – Test Application";
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.ResumeLayout(false);
-            this.PerformLayout();
 
         }
 
@@ -127,9 +129,9 @@
         private ImageZoomView imageZoomView1;
         private System.Windows.Forms.PictureBox pictureBox1;
         private System.Windows.Forms.Button buttonOpen;
-        private System.Windows.Forms.CheckBox checkBox1;
-        private System.Windows.Forms.TextBox textBox1;
+        private System.Windows.Forms.CheckBox checkBoxSmoothPixel;
         private System.Windows.Forms.Button buttonClear;
+        private System.Windows.Forms.ComboBox comboBoxVisualizationMode;
     }
 }
 

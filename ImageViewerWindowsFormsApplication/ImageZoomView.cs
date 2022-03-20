@@ -326,7 +326,7 @@ namespace ImageViewerWindowsFormsApplication
 
         [Browsable(true)]
         [Category("Appearance")]
-        [Description("Relative size of zoom area visualization. Use 0 to turn it off.")]
+        [Description("Relative size of zoom area visualization. 0 turns it off.")]
         [DefaultValue(_zoomAreaVisualizationSizeDefault)]
         public double ZoomAreaVisualizationSize
         {
@@ -334,20 +334,27 @@ namespace ImageViewerWindowsFormsApplication
             set { _zoomAreaVisualizationSize = value; this.Invalidate(); }
         }
 
-        private bool _zoomScaleVisualization;
+        public enum ZoomVisualizationMode { Off, AreasWhenZoomed, Areas, AreasAndScale }
+        private const ZoomVisualizationMode _zoomVisualizationDefault = ZoomVisualizationMode.AreasWhenZoomed;
+        private ZoomVisualizationMode _zoomVisualization = _zoomVisualizationDefault;
 
         [Browsable(true)]
         [Category("Appearance")]
-        [Description("Display numeric zoom value.")]
-        [DefaultValue(false)]
-        public bool ZoomScaleVisualization
+        [Description("Determines how zoom is visualized. Display zoom areas? Display zoom scale?")]
+        [DefaultValue(_zoomVisualizationDefault)]
+        public ZoomVisualizationMode ZoomVisualization
         {
-            get { return _zoomScaleVisualization; }
-            set { _zoomScaleVisualization = value; this.Invalidate(); }
+            get { return _zoomVisualization; }
+            set { _zoomVisualization = value; this.Invalidate(); }
         }
+
+        protected bool IsZoomScaleVisualization => _transform.IsValid && _zoomVisualization == ZoomVisualizationMode.AreasAndScale;
+        protected bool IsZoomAreaVisualization => _transform.IsValid && _zoomVisualization != ZoomVisualizationMode.Off && (_zoomVisualization != ZoomVisualizationMode.AreasWhenZoomed || _transform.IsActive);
 
         protected override void OnPaintBackground(PaintEventArgs pe)
         {
+            // When overriding [...] it is not necessary to call the base class's OnPaintBackground(PaintEventArgs).
+
             Graphics graphics = pe.Graphics;
 
             using (var brush = new SolidBrush(this.BackColor))
@@ -358,6 +365,9 @@ namespace ImageViewerWindowsFormsApplication
 
         protected override void OnPaint(PaintEventArgs pe)
         {
+            // When overriding [...], be sure to call the base class's OnPaint(PaintEventArgs) method so that registered delegates receive the event.
+            base.OnPaint(pe);
+
             Graphics graphics = pe.Graphics;
 
             Color color = SystemColors.GrayText;
@@ -383,7 +393,7 @@ namespace ImageViewerWindowsFormsApplication
                 graphics.InterpolationMode = InterpolationMode.Bilinear;
                 graphics.PixelOffsetMode = PixelOffsetMode.Default;
 
-                if (_zoomAreaVisualizationSize > 0 && (_transform.IsActive || _zoomScaleVisualization && _transform.IsValid))
+                if (IsZoomAreaVisualization)
                 {
                     var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.VisualizationArea.Client);
                     var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.VisualizationArea.Zoom);
@@ -411,7 +421,7 @@ namespace ImageViewerWindowsFormsApplication
                 }
             }
 
-            if (_zoomScaleVisualization && _transform.IsValid)
+            if (IsZoomScaleVisualization)
             {
                 Rectangle displayArea = this.ClientRectangle;
                 displayArea.Inflate(-5, -5);
@@ -721,6 +731,14 @@ namespace ImageViewerWindowsFormsApplication
                 case Keys.D:
                     ZoomMove(1, 0, e.Modifiers);
                     Invalidate();
+                    break;
+
+                case Keys.V:
+                    if (e.Modifiers == (Keys.Shift | Keys.Control))
+                    {
+                        var values = (ZoomVisualizationMode[])Enum.GetValues(typeof(ZoomVisualizationMode));
+                        ZoomVisualization = values[(Array.IndexOf(values, ZoomVisualization) + 1) % values.Length];
+                    }
                     break;
             }
 

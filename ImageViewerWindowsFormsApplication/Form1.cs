@@ -16,7 +16,9 @@ namespace ImageViewerWindowsFormsApplication
         public Form1()
         {
             InitializeComponent();
-            checkBox1_CheckedChanged(this, new EventArgs());
+            comboBoxVisualizationMode.Items.Clear();
+            comboBoxVisualizationMode.Items.AddRange(Enum.GetValues(typeof(ImageZoomView.ZoomVisualizationMode)).Cast<object>().ToArray());
+            checkBoxSmoothPixel_CheckedChanged(this, new EventArgs());
 
 #if true
             SetImage(@"C:\Users\Axel\Pictures\test.png");
@@ -53,9 +55,19 @@ namespace ImageViewerWindowsFormsApplication
             this.imageZoomView1.Image = null;
         }
 
-        private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        private void checkBoxSmoothPixel_CheckedChanged(object sender, EventArgs e)
         {
-            this.imageZoomView1.ShowPixelBorders = !checkBox1.Checked;
+            this.imageZoomView1.ShowPixelBorders = !checkBoxSmoothPixel.Checked;
+        }
+
+        private void comboBoxVisualizationMode_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            this.imageZoomView1.ZoomVisualization = (ImageZoomView.ZoomVisualizationMode) comboBoxVisualizationMode.SelectedItem;
+        }
+
+        private void imageZoomView1_Paint(object sender, PaintEventArgs e)
+        {
+            comboBoxVisualizationMode.SelectedItem = this.imageZoomView1.ZoomVisualization;
         }
     }
 }
