@@ -759,7 +759,7 @@ namespace ImageViewerWindowsFormsApplication
         {
             // if we are fully zoomed out move would have no effect => zoom in a bit
             if (!_transform.IsActive)
-                _transform.UpdateRelativeZoom(0.5, 0.5, 0.5);
+                _transform.UpdateRelativeZoom(0.25, 0.5, 0.5);
 
             double speed = GetMoveSpeed(modifiers);
             _transform.UpdateRelativeMove(dX * speed, dY * speed);
