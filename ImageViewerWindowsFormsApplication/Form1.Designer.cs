@@ -96,13 +96,18 @@
             this.imageZoomView1.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left) 
             | System.Windows.Forms.AnchorStyles.Right)));
-            this.imageZoomView1.BackColor = System.Drawing.SystemColors.Control;
+            this.imageZoomView1.BackColor = System.Drawing.Color.Black;
+            this.imageZoomView1.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.imageZoomView1.ForeColor = System.Drawing.Color.White;
             this.imageZoomView1.Image = null;
             this.imageZoomView1.Location = new System.Drawing.Point(13, 13);
+            this.imageZoomView1.MaximumPixelSize = 100D;
             this.imageZoomView1.Name = "imageZoomView1";
             this.imageZoomView1.Size = new System.Drawing.Size(153, 236);
             this.imageZoomView1.TabIndex = 0;
             this.imageZoomView1.Text = "No Image";
+            this.imageZoomView1.ZoomAreaVisualizationSize = 0.25D;
+            this.imageZoomView1.ZoomVisualization = ImageViewerWindowsFormsApplication.ImageZoomView.ZoomVisualizationMode.AreasAndScale;
             this.imageZoomView1.Paint += new System.Windows.Forms.PaintEventHandler(this.imageZoomView1_Paint);
             // 
             // Form1

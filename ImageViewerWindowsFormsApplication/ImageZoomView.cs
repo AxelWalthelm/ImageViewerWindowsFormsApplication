@@ -12,7 +12,8 @@ using System.Windows.Forms;
 namespace ImageViewerWindowsFormsApplication
 {
     // Display an image similar to PictureBox but allows interactive zoom operations to view parts of the image enlarged.
-    // Always shows image as large as possible, but to preserve aspect ratio some empty border regions may be displayed.
+    // Always shows image as large as possible, but to preserve aspect ratio empty border regions are added at two sides.
+    // If maximum pixel size does not allow the image to be displayed larger (e.g. for very small images), empty border is added at all siedes.
     // Resizing the control will try to keep center of image visible and adjusts zoom settings accordingly.
     // When a new image is set, the control tries to preserve zoom settings;
     // if the new image has different size, zoom settings are adjusted to show a similar region of the image.
@@ -45,7 +46,7 @@ namespace ImageViewerWindowsFormsApplication
             public double ZoomFactor => _zoomFactor;
             public double RelativeZoomFactor => Math.Max(_relativeZoomFactorRaw, MinimumRelativeZoomFactor);
 
-            public bool IsValid => _zoomFactor > 0;
+            public bool IsValid => _zoomFactor > 0 && MinimumRelativeZoomFactor < 1;
             public bool IsActive => IsValid && RelativeZoomFactor < 1;
 
             public double MaximumPixelSize = _maximumPixelSizeDefault;
@@ -99,12 +100,12 @@ namespace ImageViewerWindowsFormsApplication
             {
                 relativeSize = Math.Abs(relativeSize);
 
-                double size = relativeSize * Math.Min(_clientSize.Width, _clientSize.Height);
-                double border = Math.Max(5, 0.1 * size);
-
-                var clientArea = new RectangleD(border, border,
-                    _clientSize.Width >= _clientSize.Height ? size : size * _clientSize.Width / _clientSize.Height,
-                    _clientSize.Height >= _clientSize.Width ? size : size * _clientSize.Height / _clientSize.Width);
+                double border = 8;
+                double maxRelativeSize = Math.Min(
+                    (_clientSize.Width - 2 * border) / _clientSize.Width,
+                    (_clientSize.Height - 2 * border) / _clientSize.Height);
+                relativeSize = Math.Max(Math.Min(relativeSize, maxRelativeSize), 0);
+                var clientArea = new RectangleD(border, border, relativeSize * _clientSize.Width, relativeSize * _clientSize.Height);
 
                 if (area == VisualizationArea.Client)
                     return clientArea;
@@ -306,12 +307,12 @@ namespace ImageViewerWindowsFormsApplication
 
         [Browsable(true)]
         [Category("Behavior")]
-        [Description("Maximum allowed pixel size when zooming in.")]
+        [Description("Maximum allowed pixel size when zooming in. Must be at least 1.")]
         [DefaultValue(_maximumPixelSizeDefault)]
         public double MaximumPixelSize
         {
             get { return _transform.MaximumPixelSize; }
-            set { _transform.MaximumPixelSize = value; this.Invalidate(); }
+            set { _transform.MaximumPixelSize = Math.Max(1, value); this.Invalidate(); }
         }
 
         [Browsable(true)]
@@ -329,12 +330,12 @@ namespace ImageViewerWindowsFormsApplication
 
         [Browsable(true)]
         [Category("Appearance")]
-        [Description("Relative size of zoom area visualization. 0 turns it off.")]
+        [Description("Relative size of zoom area visualization. 1 is largest, 0 is invisible.")]
         [DefaultValue(_zoomAreaVisualizationSizeDefault)]
         public double ZoomAreaVisualizationSize
         {
             get { return _zoomAreaVisualizationSize; }
-            set { _zoomAreaVisualizationSize = value; this.Invalidate(); }
+            set { _zoomAreaVisualizationSize = Math.Min(Math.Max(value, 0), 1); this.Invalidate(); }
         }
 
         public enum ZoomVisualizationMode { Off, AreasWhenZoomed, Areas, AreasAndScale }
@@ -351,8 +352,9 @@ namespace ImageViewerWindowsFormsApplication
             set { _zoomVisualization = value; this.Invalidate(); }
         }
 
-        protected bool IsZoomScaleVisualization => _image != null && _transform.IsValid && _zoomVisualization == ZoomVisualizationMode.AreasAndScale;
-        protected bool IsZoomAreaVisualization => _image != null && _transform.IsValid && _zoomVisualization != ZoomVisualizationMode.Off && (_zoomVisualization != ZoomVisualizationMode.AreasWhenZoomed || _transform.IsActive);
+        protected bool IsZoomVisualization => _image != null && _transform.IsValid && this.ClientSize.Width > 20 && this.ClientSize.Height > 20;
+        protected bool IsZoomScaleVisualization => IsZoomVisualization && _zoomVisualization == ZoomVisualizationMode.AreasAndScale;
+        protected bool IsZoomAreaVisualization => IsZoomVisualization && _zoomVisualization != ZoomVisualizationMode.Off && (_zoomVisualization != ZoomVisualizationMode.AreasWhenZoomed || _transform.IsActive);
 
         protected override void OnPaintBackground(PaintEventArgs pe)
         {
@@ -373,7 +375,9 @@ namespace ImageViewerWindowsFormsApplication
 
             Graphics graphics = pe.Graphics;
 
-            Color color = SystemColors.GrayText;
+            Color color = this.BackColor == SystemColors.Control && this.ForeColor == SystemColors.ControlText
+                ? SystemColors.GrayText
+                : MiddleColor(this.BackColor, this.ForeColor, 0.543);
             bool isActive = this.Focused;
             bool hasImage = this._image != null;
 

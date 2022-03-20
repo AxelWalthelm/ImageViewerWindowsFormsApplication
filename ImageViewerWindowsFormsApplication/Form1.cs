@@ -20,7 +20,7 @@ namespace ImageViewerWindowsFormsApplication
             comboBoxVisualizationMode.Items.AddRange(Enum.GetValues(typeof(ImageZoomView.ZoomVisualizationMode)).Cast<object>().ToArray());
             checkBoxSmoothPixel_CheckedChanged(this, new EventArgs());
 
-#if true
+#if false
             SetImage(@"C:\Users\Axel\Pictures\test.png");
 #endif
         }
