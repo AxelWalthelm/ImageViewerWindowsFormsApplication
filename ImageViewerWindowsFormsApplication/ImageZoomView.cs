@@ -94,12 +94,8 @@ namespace ImageViewerWindowsFormsApplication
             public Rectangle Src => _src.ToInt();
             public Rectangle Dst => _dst.ToInt();
 
-            public enum ZoomAreaVisualization
-            {
-                Zoom, Client, Image
-            }
-
-            private RectangleD GetZoomAreaVisualizationD(double relativeSize, ZoomAreaVisualization area)
+            public enum VisualizationArea { Zoom, Client, Image }
+            private RectangleD GetZoomAreaVisualizationD(double relativeSize, VisualizationArea area)
             {
                 relativeSize = Math.Abs(relativeSize);
 
@@ -110,7 +106,7 @@ namespace ImageViewerWindowsFormsApplication
                     _clientSize.Width >= _clientSize.Height ? size : size * _clientSize.Width / _clientSize.Height,
                     _clientSize.Height >= _clientSize.Width ? size : size * _clientSize.Height / _clientSize.Width);
 
-                if (area == ZoomAreaVisualization.Client)
+                if (area == VisualizationArea.Client)
                     return clientArea;
 
                 //double aspect = (_imageSize.Width / _imageSize.Height) / (_clientSize.Width / _clientSize.Height);
@@ -120,7 +116,7 @@ namespace ImageViewerWindowsFormsApplication
                     ? new RectangleD(clientArea.X + clientArea.Width * (1 - aspect) * 0.5, clientArea.Y, clientArea.Width * aspect, clientArea.Height)
                     : new RectangleD(clientArea.X, clientArea.Y + clientArea.Height * (1 - 1 / aspect) * 0.5, clientArea.Width, clientArea.Height / aspect);
 
-                if (area == ZoomAreaVisualization.Image)
+                if (area == VisualizationArea.Image)
                     return imageArea;
 
                 double factorX = imageArea.Width / _imageSize.Width;
@@ -132,8 +128,8 @@ namespace ImageViewerWindowsFormsApplication
                     _src.Height * factorY);
             }
 
-            public RectangleF GetZoomAreaVisualizationF(double relativeSize, ZoomAreaVisualization area) => GetZoomAreaVisualizationD(relativeSize, area).ToFloat();
-            public Rectangle GetZoomAreaVisualization(double relativeSize, ZoomAreaVisualization area) => GetZoomAreaVisualizationD(relativeSize, area).ToInt();
+            public RectangleF GetZoomAreaVisualizationF(double relativeSize, VisualizationArea area) => GetZoomAreaVisualizationD(relativeSize, area).ToFloat();
+            public Rectangle GetZoomAreaVisualization(double relativeSize, VisualizationArea area) => GetZoomAreaVisualizationD(relativeSize, area).ToInt();
 
             public bool UpdateSizes(Size imageSize, Size clientSize)
             {
@@ -230,18 +226,17 @@ namespace ImageViewerWindowsFormsApplication
                 }
                 else
                 {
-                    var imageArea = GetZoomAreaVisualizationD(zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Image);
-
-                    // var zoomArea = GetZoomAreaVisualizationD(zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
+                    var imageArea = GetZoomAreaVisualizationD(zoomAreaVisualizationSize, VisualizationArea.Image);
+                    // var zoomArea = GetZoomAreaVisualizationD(zoomAreaVisualizationSize, ZoomAreaVisualization.Zoom);
                     //// expand formula until it contains _relativeSrcCenterX
                     // zoomArea.X = imageArea.X + (_relativeSrcCenterX * (_imageSize.Width - 1) - (_clientSize.Width / _zoomFactor - 1) * 0.5) * imageArea.Width / _imageSize.Width
-                    //// simplify formula by substitunting all constant terms
+                    //// simplify formula by substitunting all terms not depending on _relativeSrcCenterX
                     // zoomArea.X = a + (_relativeSrcCenterX * b - c) * d
                     // a := imageArea.X
                     // b := _imageSize.Width - 1
                     // c := (_clientSize.Width / _zoomFactor - 1) * 0.5
                     // d := imageArea.Width / _imageSize.Width;
-                    //// we are only interested in change, so we switch to delta
+                    //// we are only interested in change, so we switch to delta by substracting old from new
                     // clientPixelX = zoomArea.X{new} - zoomArea.X{old}
                     // clientPixelX = a + (_relativeSrcCenterX{new} * b - c) * d - (a + (_relativeSrcCenterX{old} * b - c) * d)
                     // clientPixelX = (_relativeSrcCenterX{new} - _relativeSrcCenterX{old}) * b * d
@@ -390,9 +385,9 @@ namespace ImageViewerWindowsFormsApplication
 
                 if (_zoomAreaVisualizationSize > 0 && (_transform.IsActive || _zoomScaleVisualization && _transform.IsValid))
                 {
-                    var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Client);
-                    var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
-                    var image = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Image);
+                    var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.VisualizationArea.Client);
+                    var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.VisualizationArea.Zoom);
+                    var image = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.VisualizationArea.Image);
 
                     using (var backPen = new Pen(this.BackColor, 5))
                     using (var forePen = new Pen(this.ForeColor, 1))
@@ -511,14 +506,21 @@ namespace ImageViewerWindowsFormsApplication
                 }
                 else if (eventType == MouseEventType.Down)
                 {
-                    Rectangle r1 = _transform.GetZoomAreaVisualization(_zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
+                    Rectangle r0 = _transform.GetZoomAreaVisualization(_zoomAreaVisualizationSize, Transform.VisualizationArea.Image);
+                    Rectangle r1 = _transform.GetZoomAreaVisualization(_zoomAreaVisualizationSize, Transform.VisualizationArea.Zoom);
                     Rectangle r2 = r1;
                     r1.Inflate(-3, -3);
+                    r1.Intersect(r0); // only click inside image area can start fast drag
                     r2.Inflate(3, 3);
                     Point clientPoint = PointToClient(this.PointToScreen(e.Location));
                     bool isFastDrag = r1.Contains(clientPoint);
                     _dragLeftMouse.IsValid = !r2.Contains(clientPoint) || isFastDrag;
                     _dragLeftMouse.IsStartedOnZoomAreaVisualization = isFastDrag;
+                    if (isFastDrag)
+                    {
+                        // limit cursor movement to image area
+                        Cursor.Clip = this.RectangleToScreen(r0);
+                    }
 
                     this.Invalidate();
                 }
@@ -528,6 +530,9 @@ namespace ImageViewerWindowsFormsApplication
             else if (_dragLeftMouse.IsValid)
             {
                 _dragLeftMouse.IsValid = false;
+
+                // release any limitation of cursor movement
+                Cursor.Clip = new Rectangle();
 
                 this.Invalidate();
             }
