@@ -48,6 +48,8 @@ namespace ImageViewerWindowsFormsApplication
             public double ZoomFactor => _zoomFactor;
             public double RelativeZoomFactor => Math.Max(_relativeZoomFactorRaw, MinimumRelativeZoomFactor);
 
+            public bool IsActive => RelativeZoomFactor < 1;
+
             public double MaximumPixelSize = _maximumPixelSizeDefault;
 
             public double NeutralRelativeZoomFactor => _imageSize.Width <= 0 || _imageSize.Height <= 0 ? 0 : Math.Min(
@@ -215,16 +217,49 @@ namespace ImageViewerWindowsFormsApplication
                 UpdateAbsolute();
             }
 
-            public void UpdateRelativeMoveFromClientMove(int clientPixelX, int clientPixelY)
+            public void UpdateRelativeMoveFromClientMove(int clientPixelX, int clientPixelY, double zoomAreaRelativeVisualizationSize)
             {
                 UpdateAbsolute();
 
-                // convert client to relative
-                double dX = clientPixelX / (_zoomFactor * (_imageSize.Width - 1));
-                double dY = clientPixelY / (_zoomFactor * (_imageSize.Height - 1));
+                if (zoomAreaRelativeVisualizationSize <= 0)
+                {
+                    // convert client to image relative
+                    double dX = clientPixelX / (_zoomFactor * (_imageSize.Width - 1));
+                    double dY = clientPixelY / (_zoomFactor * (_imageSize.Height - 1));
 
-                _relativeSrcCenterX -= dX;
-                _relativeSrcCenterY -= dY;
+                    _relativeSrcCenterX -= dX;
+                    _relativeSrcCenterY -= dY;
+                }
+                else
+                {
+                    var imageArea = GetZoomAreaVisualizationD(zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Image);
+
+                    // var zoomArea = GetZoomAreaVisualizationD(zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
+                    //// expand formula until it contains _relativeSrcCenterX
+                    // zoomArea.X = imageArea.X + (_relativeSrcCenterX * (_imageSize.Width - 1) - (_clientSize.Width / _zoomFactor - 1) * 0.5) * imageArea.Width / _imageSize.Width
+                    //// simplify formula by substitunting all constant terms
+                    // zoomArea.X = a + (_relativeSrcCenterX * b - c) * d
+                    // a := imageArea.X
+                    // b := _imageSize.Width - 1
+                    // c := (_clientSize.Width / _zoomFactor - 1) * 0.5
+                    // d := imageArea.Width / _imageSize.Width;
+                    //// we are only interested in change, so we switch to delta
+                    // clientPixelX = zoomArea.X{new} - zoomArea.X{old}
+                    // clientPixelX = a + (_relativeSrcCenterX{new} * b - c) * d - (a + (_relativeSrcCenterX{old} * b - c) * d)
+                    // clientPixelX = (_relativeSrcCenterX{new} - _relativeSrcCenterX{old}) * b * d
+                    //// dX := _relativeSrcCenterX{new} - _relativeSrcCenterX{old}
+                    // clientPixelX = dX * b * d
+                    // dX = clientPixelX / (b * d)
+                    //// re-substitute
+                    // dX = clientPixelX / (imageArea.Width * (_imageSize.Width - 1) / _imageSize.Width)
+                    // dX = clientPixelX * _imageSize.Width / ((_imageSize.Width - 1) * imageArea.Width)
+                    double dX = clientPixelX * (_imageSize.Width / ((_imageSize.Width - 1) * imageArea.Width));
+                    double dY = clientPixelY * (_imageSize.Height / ((_imageSize.Height - 1) * imageArea.Height));
+
+                    _relativeSrcCenterX += dX;
+                    _relativeSrcCenterY += dY;
+                }
+
                 LimitRelativeSrcCenter();
 
                 UpdateAbsolute();
@@ -353,7 +388,7 @@ namespace ImageViewerWindowsFormsApplication
                 graphics.InterpolationMode = InterpolationMode.Bilinear;
                 graphics.PixelOffsetMode = PixelOffsetMode.Default;
 
-                if (_zoomAreaRelativeVisualizationSize > 0 && (_transform.RelativeZoomFactor < 1 || ShowZoomFactor && _transform.ZoomFactor > 0))
+                if (_zoomAreaRelativeVisualizationSize > 0 && (_transform.IsActive || ShowZoomFactor && _transform.ZoomFactor > 0))
                 {
                     var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Client);
                     var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
@@ -362,16 +397,19 @@ namespace ImageViewerWindowsFormsApplication
                     using (var backPen = new Pen(this.BackColor, 5))
                     using (var forePen = new Pen(this.ForeColor, 1))
                     using (var palePen = new Pen(MiddleColor(this.BackColor, this.ForeColor, 0.2), 1))
+                    using (var highlightPen = _dragLeftMouse.IsFastDrag ? new Pen(SystemColors.Highlight, backPen.Width) : null)
                     {
+                        var dragPen = highlightPen ?? backPen;
+
                         graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
                         graphics.DrawRectangle(backPen, outer.X, outer.Y, outer.Width, outer.Height);
-                        graphics.DrawRectangle(backPen, inner.X, inner.Y, inner.Width, inner.Height);
                         graphics.DrawRectangle(backPen, image.X, image.Y, image.Width, image.Height);
+                        graphics.DrawRectangle(dragPen, inner.X, inner.Y, inner.Width, inner.Height);
 
                         graphics.DrawRectangle(palePen, outer.X, outer.Y, outer.Width, outer.Height);
-                        graphics.DrawRectangle(forePen, inner.X, inner.Y, inner.Width, inner.Height);
                         graphics.DrawRectangle(forePen, image.X, image.Y, image.Width, image.Height);
+                        graphics.DrawRectangle(forePen, inner.X, inner.Y, inner.Width, inner.Height);
 
                         graphics.SmoothingMode = SmoothingMode.None;
                     }
@@ -422,39 +460,76 @@ namespace ImageViewerWindowsFormsApplication
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
-            TrackDragMouse(e);
+            TrackDragMouse(e, MouseEventType.Down);
 
             base.OnMouseDown(e);
         }
 
         protected override void OnMouseMove(MouseEventArgs e)
         {
-            TrackDragMouse(e);
+            TrackDragMouse(e, MouseEventType.Move);
 
             base.OnMouseMove(e);
         }
 
-        private Point? _dragLeftMousePosition;
-
-        private void TrackDragMouse(MouseEventArgs e)
+        // we do not expect to get this event (cursor could leave without mouse up)
+        // but if we get it, we use it
+        protected override void OnMouseUp(MouseEventArgs e)
         {
-            if ((e.Button & MouseButtons.Left) != 0)
+            TrackDragMouse(e, MouseEventType.Up);
+
+            base.OnMouseUp(e);
+        }
+
+        private struct MouseDragInfo
+        {
+            public Point LastPosition;
+            public bool IsValid;
+            public bool IsStartedOnZoomAreaVisualization;
+
+            public bool IsFastDrag => IsValid && IsStartedOnZoomAreaVisualization;
+        }
+        private MouseDragInfo _dragLeftMouse;
+
+        private enum MouseEventType { Move, Up, Down };
+        private void TrackDragMouse(MouseEventArgs e, MouseEventType eventType)
+        {
+            if ((e.Button & MouseButtons.Left) != 0 && eventType != MouseEventType.Up && _transform.IsActive)
             {
-                if (_dragLeftMousePosition.HasValue)
+                if (_dragLeftMouse.IsValid)
                 {
                     // move zoom location
-                    _transform.UpdateRelativeMoveFromClientMove(
-                        e.Location.X - _dragLeftMousePosition.Value.X,
-                        e.Location.Y - _dragLeftMousePosition.Value.Y);
+                    int dX = e.Location.X - _dragLeftMouse.LastPosition.X;
+                    int dY = e.Location.Y - _dragLeftMouse.LastPosition.Y;
+
+                    if (dX != 0 || dY != 0)
+                    {
+                        _transform.UpdateRelativeMoveFromClientMove(dX, dY, _dragLeftMouse.IsFastDrag ? _zoomAreaRelativeVisualizationSize : 0);
+
+                        this.Invalidate();
+                    }
+                }
+                else if (eventType == MouseEventType.Down)
+                {
+                    Rectangle r1 = _transform.GetZoomAreaVisualization(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
+                    Rectangle r2 = r1;
+                    r1.Inflate(-3, -3);
+                    r2.Inflate(3, 3);
+                    Point clientPoint = PointToClient(this.PointToScreen(e.Location));
+                    bool isFastDrag = r1.Contains(clientPoint);
+                    _dragLeftMouse.IsValid = !r2.Contains(clientPoint) || isFastDrag;
+                    _dragLeftMouse.IsStartedOnZoomAreaVisualization = isFastDrag;
 
                     this.Invalidate();
                 }
 
-                _dragLeftMousePosition = e.Location;
+                _dragLeftMouse.LastPosition = e.Location;
             }
-            else
+            else if (_dragLeftMouse.IsValid)
             {
-                _dragLeftMousePosition = null;
+                _dragLeftMouse.IsValid = false;
+
+                this.Invalidate();
             }
         }
 
@@ -681,7 +756,7 @@ namespace ImageViewerWindowsFormsApplication
         private void ZoomMove(double dX, double dY, Keys modifiers)
         {
             // if we are fully zoomed out move would have no effect => zoom in a bit
-            if (_transform.RelativeZoomFactor >= 1)
+            if (!_transform.IsActive)
                 _transform.UpdateRelativeZoom(0.5, 0.5, 0.5);
 
             double speed = GetMoveSpeed(modifiers);
