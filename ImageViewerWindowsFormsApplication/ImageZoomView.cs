@@ -348,8 +348,8 @@ namespace ImageViewerWindowsFormsApplication
             set { _zoomVisualization = value; this.Invalidate(); }
         }
 
-        protected bool IsZoomScaleVisualization => _transform.IsValid && _zoomVisualization == ZoomVisualizationMode.AreasAndScale;
-        protected bool IsZoomAreaVisualization => _transform.IsValid && _zoomVisualization != ZoomVisualizationMode.Off && (_zoomVisualization != ZoomVisualizationMode.AreasWhenZoomed || _transform.IsActive);
+        protected bool IsZoomScaleVisualization => _image != null && _transform.IsValid && _zoomVisualization == ZoomVisualizationMode.AreasAndScale;
+        protected bool IsZoomAreaVisualization => _image != null && _transform.IsValid && _zoomVisualization != ZoomVisualizationMode.Off && (_zoomVisualization != ZoomVisualizationMode.AreasWhenZoomed || _transform.IsActive);
 
         protected override void OnPaintBackground(PaintEventArgs pe)
         {
@@ -613,6 +613,11 @@ namespace ImageViewerWindowsFormsApplication
                 case Keys.Right:
                     e.IsInputKey = true;
                     break;
+
+                case Keys.Tab:
+                    if (e.Modifiers == Keys.Control || e.Modifiers == (Keys.Shift | Keys.Control))
+                        e.IsInputKey = true;
+                    break;
             }
 
             base.OnPreviewKeyDown(e);
@@ -661,29 +666,28 @@ namespace ImageViewerWindowsFormsApplication
                     break;
 
                 case Keys.Home:
-                    if (_transform.RelativeZoomFactor < _transform.NeutralRelativeZoomFactor)
-                    {
-                        _transform.UpdateRelativeZoom(_transform.NeutralRelativeZoomFactor, 0.5, 0.5);
-                    }
-                    else
-                    {
-                        _transform.Reset();
-                    }
+                    Zoom3Steps(false);
+                    Invalidate();
+                    e.Handled = true;
+                    break;
+
+                case Keys.End:
+                    Zoom3Steps(true);
                     Invalidate();
                     e.Handled = true;
                     break;
 
                 case Keys.Space:
-                case Keys.End:
-                    if (_transform.RelativeZoomFactor > _transform.NeutralRelativeZoomFactor)
+                    if (e.Modifiers == Keys.None)
                     {
-                        _transform.UpdateRelativeZoom(_transform.NeutralRelativeZoomFactor, 0.5, 0.5);
+                        Zoom3Steps(true, true);
+                        Invalidate();
                     }
-                    else
+                    else if (e.Modifiers == Keys.Shift)
                     {
-                        _transform.UpdateRelativeZoom(0, 0.5, 0.5);
+                        Zoom3Steps(false, true);
+                        Invalidate();
                     }
-                    Invalidate();
                     e.Handled = true;
                     break;
 
@@ -733,11 +737,19 @@ namespace ImageViewerWindowsFormsApplication
                     Invalidate();
                     break;
 
-                case Keys.V:
-                    if (e.Modifiers == (Keys.Shift | Keys.Control))
+                case Keys.Tab:
+                    if (_image != null)
                     {
-                        var values = (ZoomVisualizationMode[])Enum.GetValues(typeof(ZoomVisualizationMode));
-                        ZoomVisualization = values[(Array.IndexOf(values, ZoomVisualization) + 1) % values.Length];
+                        if (e.Modifiers == Keys.Control)
+                        {
+                            var values = (ZoomVisualizationMode[])Enum.GetValues(typeof(ZoomVisualizationMode));
+                            ZoomVisualization = values[(Array.IndexOf(values, ZoomVisualization) + 1) % values.Length];
+                        }
+                        else if (e.Modifiers == (Keys.Shift | Keys.Control))
+                        {
+                            var values = (ZoomVisualizationMode[])Enum.GetValues(typeof(ZoomVisualizationMode));
+                            ZoomVisualization = values[(Array.IndexOf(values, ZoomVisualization) + values.Length - 1) % values.Length];
+                        }
                     }
                     break;
             }
@@ -745,9 +757,49 @@ namespace ImageViewerWindowsFormsApplication
             base.OnKeyDown(e);
         }
 
+        private void Zoom3Steps(bool zoomIn, bool cyclic = false)
+        {
+            if (_image == null)
+            {
+                _transform.Reset();
+                return;
+            }
+
+            if (zoomIn)
+            {
+                if (_transform.RelativeZoomFactor > _transform.NeutralRelativeZoomFactor)
+                {
+                    _transform.UpdateRelativeZoom(_transform.NeutralRelativeZoomFactor, 0.5, 0.5);
+                }
+                else if (_transform.RelativeZoomFactor > _transform.MinimumRelativeZoomFactor)
+                {
+                    _transform.UpdateRelativeZoom(0, 0.5, 0.5);
+                }
+                else if (cyclic)
+                {
+                    _transform.Reset();
+                }
+            }
+            else
+            {
+                if (_transform.RelativeZoomFactor < _transform.NeutralRelativeZoomFactor)
+                {
+                    _transform.UpdateRelativeZoom(_transform.NeutralRelativeZoomFactor, 0.5, 0.5);
+                }
+                else if (_transform.RelativeZoomFactor < 1)
+                {
+                    _transform.Reset();
+                }
+                else if (cyclic)
+                {
+                    _transform.UpdateRelativeZoom(0, 0.5, 0.5);
+                }
+            }
+        }
+
         private void ZoomScroll(Point focus, bool zoomIn, Keys modifiers)
         {
-            if (!_transform.UpdateSizes(_image.Size, this.ClientSize))
+            if (_image == null || !_transform.UpdateSizes(_image.Size, this.ClientSize))
                 return;
 
             double stepFactor = GetZoomSpeed(zoomIn ? 1 : -1, modifiers);
@@ -773,6 +825,9 @@ namespace ImageViewerWindowsFormsApplication
 
         private void ZoomStep(double stepIn, Keys modifiers)
         {
+            if (_image == null)
+                return;
+
             double stepFactor = GetZoomSpeed(stepIn, modifiers);
             double newRelativeZoomFactor = _transform.RelativeZoomFactor * stepFactor;
             _transform.UpdateRelativeZoom(newRelativeZoomFactor, 0.5, 0.5);
@@ -780,6 +835,9 @@ namespace ImageViewerWindowsFormsApplication
 
         private void ZoomMove(double dX, double dY, Keys modifiers)
         {
+            if (_image == null)
+                return;
+
             // if we are fully zoomed out move would have no effect => zoom in a bit
             if (!_transform.IsActive)
                 _transform.UpdateRelativeZoom(0.25, 0.5, 0.5);
