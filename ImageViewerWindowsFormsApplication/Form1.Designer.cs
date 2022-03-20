@@ -97,10 +97,10 @@
             this.imageZoomView1.Image = null;
             this.imageZoomView1.Location = new System.Drawing.Point(13, 13);
             this.imageZoomView1.Name = "imageZoomView1";
-            this.imageZoomView1.ShowZoomFactor = true;
             this.imageZoomView1.Size = new System.Drawing.Size(153, 236);
             this.imageZoomView1.TabIndex = 0;
             this.imageZoomView1.Text = "No Image";
+            this.imageZoomView1.ZoomScaleVisualization = true;
             // 
             // Form1
             // 

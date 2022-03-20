@@ -21,9 +21,6 @@ namespace ImageViewerWindowsFormsApplication
     [ToolboxBitmap(typeof(PictureBox))]
     public partial class ImageZoomView : Control
     {
-        public const double _scrollZoomFactor = 1.15;
-        private const double _maximumPixelSizeDefault = 10;
-
         private class Transform
         {
             private double _relativeZoomFactorRaw = 1.0; // [0,1] 1: full image; 0: maximum zoom in (special value, see also RelativeZoomFactor)
@@ -48,7 +45,8 @@ namespace ImageViewerWindowsFormsApplication
             public double ZoomFactor => _zoomFactor;
             public double RelativeZoomFactor => Math.Max(_relativeZoomFactorRaw, MinimumRelativeZoomFactor);
 
-            public bool IsActive => RelativeZoomFactor < 1;
+            public bool IsValid => _zoomFactor > 0;
+            public bool IsActive => IsValid && RelativeZoomFactor < 1;
 
             public double MaximumPixelSize = _maximumPixelSizeDefault;
 
@@ -217,11 +215,11 @@ namespace ImageViewerWindowsFormsApplication
                 UpdateAbsolute();
             }
 
-            public void UpdateRelativeMoveFromClientMove(int clientPixelX, int clientPixelY, double zoomAreaRelativeVisualizationSize)
+            public void UpdateRelativeMoveFromClientMove(int clientPixelX, int clientPixelY, double zoomAreaVisualizationSize)
             {
                 UpdateAbsolute();
 
-                if (zoomAreaRelativeVisualizationSize <= 0)
+                if (zoomAreaVisualizationSize <= 0)
                 {
                     // convert client to image relative
                     double dX = clientPixelX / (_zoomFactor * (_imageSize.Width - 1));
@@ -232,9 +230,9 @@ namespace ImageViewerWindowsFormsApplication
                 }
                 else
                 {
-                    var imageArea = GetZoomAreaVisualizationD(zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Image);
+                    var imageArea = GetZoomAreaVisualizationD(zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Image);
 
-                    // var zoomArea = GetZoomAreaVisualizationD(zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
+                    // var zoomArea = GetZoomAreaVisualizationD(zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
                     //// expand formula until it contains _relativeSrcCenterX
                     // zoomArea.X = imageArea.X + (_relativeSrcCenterX * (_imageSize.Width - 1) - (_clientSize.Width / _zoomFactor - 1) * 0.5) * imageArea.Width / _imageSize.Width
                     //// simplify formula by substitunting all constant terms
@@ -299,16 +297,18 @@ namespace ImageViewerWindowsFormsApplication
 
         [Browsable(true)]
         [Category("Appearance")]
-        [Description("The image displayed.")]
+        [Description("The image to be displayed.")]
         public Image Image
         {
             get { return _image; }
             set { _image = value; this.Invalidate(); }
         }
 
+        private const double _maximumPixelSizeDefault = 10;
+
         [Browsable(true)]
         [Category("Behavior")]
-        [Description("Maximum pixel size.")]
+        [Description("Maximum allowed pixel size when zooming in.")]
         [DefaultValue(_maximumPixelSizeDefault)]
         public double MaximumPixelSize
         {
@@ -318,7 +318,7 @@ namespace ImageViewerWindowsFormsApplication
 
         [Browsable(true)]
         [Category("Behavior")]
-        [Description("Indicate pixel borders by drawing them crisp.")]
+        [Description("Indicate pixel borders by drawing them as squares without any smoothing.")]
         [DefaultValue(true)]
         public bool ShowPixelBorders
         {
@@ -326,29 +326,29 @@ namespace ImageViewerWindowsFormsApplication
             set { _transform.ShowPixelBorders = value; this.Invalidate(); }
         }
 
-        private const double _zoomAreaRelativeVisualizationSizeDefault = 0.2;
-        private double _zoomAreaRelativeVisualizationSize = _zoomAreaRelativeVisualizationSizeDefault;
+        private const double _zoomAreaVisualizationSizeDefault = 0.2;
+        private double _zoomAreaVisualizationSize = _zoomAreaVisualizationSizeDefault;
 
         [Browsable(true)]
         [Category("Appearance")]
         [Description("Relative size of zoom area visualization. Use 0 to turn it off.")]
-        [DefaultValue(_zoomAreaRelativeVisualizationSizeDefault)]
-        public double ZoomAreaRelativeVisualizationSize
+        [DefaultValue(_zoomAreaVisualizationSizeDefault)]
+        public double ZoomAreaVisualizationSize
         {
-            get { return _zoomAreaRelativeVisualizationSize; }
-            set { _zoomAreaRelativeVisualizationSize = value; this.Invalidate(); }
+            get { return _zoomAreaVisualizationSize; }
+            set { _zoomAreaVisualizationSize = value; this.Invalidate(); }
         }
 
-        private bool _showZoomFactor;
+        private bool _zoomScaleVisualization;
 
         [Browsable(true)]
         [Category("Appearance")]
         [Description("Display numeric zoom value.")]
         [DefaultValue(false)]
-        public bool ShowZoomFactor
+        public bool ZoomScaleVisualization
         {
-            get { return _showZoomFactor; }
-            set { _showZoomFactor = value; this.Invalidate(); }
+            get { return _zoomScaleVisualization; }
+            set { _zoomScaleVisualization = value; this.Invalidate(); }
         }
 
         protected override void OnPaintBackground(PaintEventArgs pe)
@@ -388,11 +388,11 @@ namespace ImageViewerWindowsFormsApplication
                 graphics.InterpolationMode = InterpolationMode.Bilinear;
                 graphics.PixelOffsetMode = PixelOffsetMode.Default;
 
-                if (_zoomAreaRelativeVisualizationSize > 0 && (_transform.IsActive || ShowZoomFactor && _transform.ZoomFactor > 0))
+                if (_zoomAreaVisualizationSize > 0 && (_transform.IsActive || _zoomScaleVisualization && _transform.IsValid))
                 {
-                    var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Client);
-                    var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
-                    var image = _transform.GetZoomAreaVisualizationF(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Image);
+                    var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Client);
+                    var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
+                    var image = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Image);
 
                     using (var backPen = new Pen(this.BackColor, 5))
                     using (var forePen = new Pen(this.ForeColor, 1))
@@ -416,7 +416,7 @@ namespace ImageViewerWindowsFormsApplication
                 }
             }
 
-            if (ShowZoomFactor && _transform.ZoomFactor > 0)
+            if (_zoomScaleVisualization && _transform.IsValid)
             {
                 Rectangle displayArea = this.ClientRectangle;
                 displayArea.Inflate(-5, -5);
@@ -504,14 +504,14 @@ namespace ImageViewerWindowsFormsApplication
 
                     if (dX != 0 || dY != 0)
                     {
-                        _transform.UpdateRelativeMoveFromClientMove(dX, dY, _dragLeftMouse.IsFastDrag ? _zoomAreaRelativeVisualizationSize : 0);
+                        _transform.UpdateRelativeMoveFromClientMove(dX, dY, _dragLeftMouse.IsFastDrag ? _zoomAreaVisualizationSize : 0);
 
                         this.Invalidate();
                     }
                 }
                 else if (eventType == MouseEventType.Down)
                 {
-                    Rectangle r1 = _transform.GetZoomAreaVisualization(_zoomAreaRelativeVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
+                    Rectangle r1 = _transform.GetZoomAreaVisualization(_zoomAreaVisualizationSize, Transform.ZoomAreaVisualization.Zoom);
                     Rectangle r2 = r1;
                     r1.Inflate(-3, -3);
                     r2.Inflate(3, 3);
@@ -743,6 +743,8 @@ namespace ImageViewerWindowsFormsApplication
         }
 
         private double GetMoveSpeed(Keys modifiers) => GetSpeed(modifiers, 0.05, 0.5, 0.9);
+
+        private const double _scrollZoomFactor = 1.15;
 
         private double GetZoomSpeed(double stepIn, Keys modifiers) => Math.Pow(_scrollZoomFactor, stepIn * -GetSpeed(modifiers, 0.25, 1, 4));
 
