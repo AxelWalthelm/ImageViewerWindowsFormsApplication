@@ -791,25 +791,25 @@ namespace ImageViewerWindowsFormsApplication
 
                 case Keys.Up:
                 case Keys.W:
-                    ZoomMove(0, -1, e.Modifiers);
+                    ZoomMove(0, -1, e.Modifiers, e.KeyCode < Keys.A);
                     Invalidate();
                     break;
 
                 case Keys.Down:
                 case Keys.S:
-                    ZoomMove(0, 1, e.Modifiers);
+                    ZoomMove(0, 1, e.Modifiers, e.KeyCode < Keys.A);
                     Invalidate();
                     break;
 
                 case Keys.Left:
                 case Keys.A:
-                    ZoomMove(-1, 0, e.Modifiers);
+                    ZoomMove(-1, 0, e.Modifiers, e.KeyCode < Keys.A);
                     Invalidate();
                     break;
 
                 case Keys.Right:
                 case Keys.D:
-                    ZoomMove(1, 0, e.Modifiers);
+                    ZoomMove(1, 0, e.Modifiers, e.KeyCode < Keys.A);
                     Invalidate();
                     break;
 
@@ -909,13 +909,13 @@ namespace ImageViewerWindowsFormsApplication
             _transform.UpdateZoom(newRelativeZoomFactor);
         }
 
-        private void ZoomMove(double dX, double dY, Keys modifiers)
+        private void ZoomMove(double dX, double dY, Keys modifiers, bool zoomAtBorder)
         {
             if (_image == null)
                 return;
 
             double speed = GetMoveSpeed(modifiers);
-            _transform.UpdateMoveFromClientStep(dX * speed, dY * speed, GetZoomSpeed(1, modifiers));
+            _transform.UpdateMoveFromClientStep(dX * speed, dY * speed, zoomAtBorder ? GetZoomSpeed(1, modifiers) : 0);
         }
     }
 }
