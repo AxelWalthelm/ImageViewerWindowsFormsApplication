@@ -23,7 +23,12 @@ namespace ImageViewerWindowsFormsApplication
 #if true
             SetImage(@"C:\Users\Axel\Pictures\test.png");
             this.WindowState = FormWindowState.Maximized;
-            imageZoomView1.SetRelativeZoom(1, 0, 0);
+            imageZoomView1.Zoom = new ImageZoomView.ZoomData
+            {
+                RelativeZoomFactorOrZero = 1,
+                RelativeSrcCenterX = 0,
+                RelativeSrcCenterY = 0
+            };
 #endif
         }
 
