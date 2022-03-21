@@ -226,12 +226,22 @@ namespace ImageViewerWindowsFormsApplication
                 Update();
             }
 
-            public void UpdateMoveFromClientStep(double clientPixelDeltaX, double clientPixelDeltaY)
+            public void UpdateMoveFromClientStep(double clientPixelDeltaX, double clientPixelDeltaY, double zoomStepFactor = 0)
             {
                 _relativeSrcCenterX += clientPixelDeltaX * RelativeZoomFactor;
                 _relativeSrcCenterY += clientPixelDeltaY * RelativeZoomFactor;
 
+                // if we reach the border when moving, we zoom in
+                double x = _relativeSrcCenterX;
+                double y = _relativeSrcCenterY;
                 LimitRelativeSrcCenter();
+                if ((_relativeSrcCenterX != x || _relativeSrcCenterY != y) && zoomStepFactor != 0)
+                {
+                    UpdateZoom(RelativeZoomFactor * zoomStepFactor);
+                    _relativeSrcCenterX = x;
+                    _relativeSrcCenterY = y;
+                    LimitRelativeSrcCenter();
+                }
 
                 Update();
             }
@@ -731,13 +741,13 @@ namespace ImageViewerWindowsFormsApplication
                     e.Handled = true;
                     break;
 
-                case Keys.Home:
+                case Keys.End:
                     Zoom3Steps(false);
                     Invalidate();
                     e.Handled = true;
                     break;
 
-                case Keys.End:
+                case Keys.Home:
                     Zoom3Steps(true);
                     Invalidate();
                     e.Handled = true;
@@ -904,12 +914,8 @@ namespace ImageViewerWindowsFormsApplication
             if (_image == null)
                 return;
 
-            // if we are fully zoomed out move would have no effect => zoom in a bit
-            if (!_transform.IsActive)
-                _transform.UpdateZoom(0.25);
-
             double speed = GetMoveSpeed(modifiers);
-            _transform.UpdateMoveFromClientStep(dX * speed, dY * speed);
+            _transform.UpdateMoveFromClientStep(dX * speed, dY * speed, GetZoomSpeed(1, modifiers));
         }
     }
 }
