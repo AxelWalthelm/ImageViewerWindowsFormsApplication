@@ -21,9 +21,9 @@ namespace ImageViewerWindowsFormsApplication
             checkBoxSmoothPixel_CheckedChanged(this, new EventArgs());
 
 #if true
-            SetImage(@"C:\Users\Axel\Pictures\testSmallXSPortrait.png");
+            SetImage(@"C:\Users\Axel\Pictures\test.png");
             this.WindowState = FormWindowState.Maximized;
-            imageZoomView1.SetRelativeZoom(0, 0, 0);
+            imageZoomView1.SetRelativeZoom(1, 0, 0);
 #endif
         }
 

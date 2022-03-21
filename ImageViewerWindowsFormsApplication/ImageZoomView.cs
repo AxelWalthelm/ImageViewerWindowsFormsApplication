@@ -95,7 +95,7 @@ namespace ImageViewerWindowsFormsApplication
             public Rectangle Src => _src.ToInt();
             public Rectangle Dst => _dst.ToInt();
 
-            public enum VisualizationArea { Zoom, Client, Image }
+            public enum VisualizationArea { Zoom, Client, Image, Move }
             private RectangleD GetZoomAreaVisualizationD(double relativeSize, VisualizationArea area)
             {
                 relativeSize = Math.Abs(relativeSize);
@@ -122,6 +122,23 @@ namespace ImageViewerWindowsFormsApplication
 
                 double factorX = imageArea.Width / _imageSize.Width;
                 double factorY = imageArea.Height / _imageSize.Height;
+
+                if (area == VisualizationArea.Move)
+                {
+                    double moveBorder = GetRelativeZoomMoveBorder();
+                    double w = _clientSize.Width / _zoomFactor;
+                    double srcX0 = moveBorder * (_imageSize.Width - 1) - (w - 1) * 0.5;
+                    double srcX1 = (1 - moveBorder) * (_imageSize.Width - 1) - (w - 1) * 0.5 + w;
+                    double h = _clientSize.Height / _zoomFactor;
+                    double srcY0 = moveBorder * (_imageSize.Height - 1) - (h - 1) * 0.5;
+                    double srcY1 = (1 - moveBorder) * (_imageSize.Height - 1) - (h - 1) * 0.5 + h;
+                    return new RectangleD(
+                        imageArea.X + srcX0 * factorX,
+                        imageArea.Y + srcY0 * factorY,
+                        (srcX1 - srcX0) * factorX,
+                        (srcY1 - srcY0) * factorY);
+                }
+
                 return new RectangleD(
                     imageArea.X + _src.X * factorX,
                     imageArea.Y + _src.Y * factorY,
@@ -269,7 +286,8 @@ namespace ImageViewerWindowsFormsApplication
             // adust _relativeSrcCenterX/Y so that displayed image does not move outside of client area
             private void LimitRelativeSrcCenter()
             {
-                double border = RelativeZoomFactor * 0.5;
+                double border = GetRelativeZoomMoveBorder();
+
                 if (_relativeSrcCenterX < border)
                     _relativeSrcCenterX = border;
                 else
@@ -281,6 +299,19 @@ namespace ImageViewerWindowsFormsApplication
                 else
                 if (_relativeSrcCenterY > 1 - border)
                     _relativeSrcCenterY = 1 - border;
+            }
+
+            private double GetRelativeZoomMoveBorder()
+            {
+                // _src.X{_relativeSrcCenterX=borderX} = 0
+                // _relativeSrcCenterX * (_imageSize.Width - 1) - (_clientSize.Width / _zoomFactor - 1) * 0.5 = 0
+                // borderX = (_clientSize.Width / _zoomFactor - 1) * 0.5 / (_imageSize.Width - 1)
+                double zoomFactor = NeutralRelativeZoomFactor / RelativeZoomFactor;
+                double borderX = (_clientSize.Width / zoomFactor - 1) * 0.5 / (_imageSize.Width - 1);
+                double borderY = (_clientSize.Height / zoomFactor - 1) * 0.5 / (_imageSize.Height - 1);
+                // apply the smaller border to all sides to allow some filling border to preserve aspect ratio and simplify navigation
+                // border > 0.5 means we have filling border at all sides and should display centered
+                return Math.Min(Math.Min(borderX, borderY), 0.5);
             }
         }
 
@@ -413,7 +444,7 @@ namespace ImageViewerWindowsFormsApplication
 
             Graphics graphics = pe.Graphics;
 
-            Color color = this.BackColor == SystemColors.Control && this.ForeColor == SystemColors.ControlText
+            Color grayText = this.BackColor == SystemColors.Control && this.ForeColor == SystemColors.ControlText
                 ? SystemColors.GrayText
                 : MiddleColor(this.BackColor, this.ForeColor, 0.543);
             bool isActive = this.Focused;
@@ -428,7 +459,7 @@ namespace ImageViewerWindowsFormsApplication
                 }
             }
 
-            ControlPaint.DrawBorder(graphics, this.ClientRectangle, color, ButtonBorderStyle.Dotted);
+            ControlPaint.DrawBorder(graphics, this.ClientRectangle, grayText, ButtonBorderStyle.Dotted);
 
             if (hasImage && _transform.UpdateSizes(_image.Size, this.ClientSize))
             {
@@ -443,6 +474,7 @@ namespace ImageViewerWindowsFormsApplication
                     var outer = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.VisualizationArea.Client);
                     var inner = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.VisualizationArea.Zoom);
                     var image = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.VisualizationArea.Image);
+                    //var zmove = _transform.GetZoomAreaVisualizationF(_zoomAreaVisualizationSize, Transform.VisualizationArea.Move);
 
                     using (var backPen = new Pen(this.BackColor, 5))
                     using (var forePen = new Pen(this.ForeColor, 1))
@@ -456,10 +488,12 @@ namespace ImageViewerWindowsFormsApplication
                         graphics.DrawRectangle(backPen, outer.X, outer.Y, outer.Width, outer.Height);
                         graphics.DrawRectangle(backPen, image.X, image.Y, image.Width, image.Height);
                         graphics.DrawRectangle(dragPen, inner.X, inner.Y, inner.Width, inner.Height);
+                        //graphics.DrawRectangle(backPen, zmove.X, zmove.Y, zmove.Width, zmove.Height);
 
                         graphics.DrawRectangle(palePen, outer.X, outer.Y, outer.Width, outer.Height);
                         graphics.DrawRectangle(forePen, image.X, image.Y, image.Width, image.Height);
                         graphics.DrawRectangle(forePen, inner.X, inner.Y, inner.Width, inner.Height);
+                        //graphics.DrawRectangle(Pens.Red, zmove.X, zmove.Y, zmove.Width, zmove.Height);
 
                         graphics.SmoothingMode = SmoothingMode.None;
                     }
@@ -491,7 +525,7 @@ namespace ImageViewerWindowsFormsApplication
 
             if (!hasImage)
             {
-                using (var brush = new SolidBrush(color))
+                using (var brush = new SolidBrush(grayText))
                 using (var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
                 {
                     graphics.DrawString(this.Text, this.Font, brush, this.ClientRectangle, format);
@@ -561,23 +595,20 @@ namespace ImageViewerWindowsFormsApplication
                 }
                 else if (eventType == MouseEventType.Down)
                 {
-                    Rectangle r0 = _transform.GetZoomAreaVisualization(_zoomAreaVisualizationSize, Transform.VisualizationArea.Image);
-                    Rectangle r1 = _transform.GetZoomAreaVisualization(_zoomAreaVisualizationSize, Transform.VisualizationArea.Zoom);
-                    Rectangle r2 = r1;
-                    r1.Inflate(-3, -3);
-                    r1.Intersect(r0); // only click inside image area can start fast drag
-                    r2.Inflate(3, 3);
+                    Rectangle zoomArea = _transform.GetZoomAreaVisualization(_zoomAreaVisualizationSize, Transform.VisualizationArea.Zoom);
+                    zoomArea.Inflate(3, 3);
                     Point clientPoint = e.Location;
-                    bool isFastDrag = r1.Contains(clientPoint);
-                    _dragLeftMouse.IsValid = !r2.Contains(clientPoint) || isFastDrag;
+                    bool isFastDrag = zoomArea.Contains(clientPoint);
+                    _dragLeftMouse.IsValid = true;
                     _dragLeftMouse.IsStartedOnZoomAreaVisualization = isFastDrag;
                     if (isFastDrag)
                     {
-                        // limit cursor movement to image area
-                        Cursor.Clip = this.RectangleToScreen(r0);
+                        // limit cursor movement
+                        Rectangle moveArea = _transform.GetZoomAreaVisualization(_zoomAreaVisualizationSize, Transform.VisualizationArea.Move);
+                        Cursor.Clip = this.RectangleToScreen(moveArea);
                     }
                     // set move cursor
-                    Cursor.Current = Cursors.SizeAll;
+                    Cursor.Current = isFastDrag ? Cursors.Cross : Cursors.SizeAll;
 
                     this.Invalidate();
                 }
@@ -727,7 +758,7 @@ namespace ImageViewerWindowsFormsApplication
                     break;
 
                 case Keys.Enter:
-                case Keys.PageDown:
+                case Keys.PageUp:
                 case Keys.Oemplus:
                 case Keys.Add:
                 case Keys.Q:
@@ -737,7 +768,7 @@ namespace ImageViewerWindowsFormsApplication
                     break;
 
                 case Keys.Back:
-                case Keys.PageUp:
+                case Keys.PageDown:
                 case Keys.OemMinus:
                 case Keys.Subtract:
                 case Keys.E:
