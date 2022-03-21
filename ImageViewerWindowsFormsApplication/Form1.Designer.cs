@@ -101,7 +101,7 @@
             this.imageZoomView1.ForeColor = System.Drawing.Color.White;
             this.imageZoomView1.Image = null;
             this.imageZoomView1.Location = new System.Drawing.Point(13, 13);
-            this.imageZoomView1.MaximumPixelSize = 4D;
+            this.imageZoomView1.MaximumPixelSize = 42D;
             this.imageZoomView1.Name = "imageZoomView1";
             this.imageZoomView1.Size = new System.Drawing.Size(153, 236);
             this.imageZoomView1.TabIndex = 0;

@@ -37,6 +37,16 @@ namespace ImageViewerWindowsFormsApplication
                 Update();
             }
 
+            public void Set(double relativeZoomFactor, double relativeSrcCenterX, double relativeSrcCenterY)
+            {
+                _relativeZoomFactorRaw = relativeZoomFactor;
+                _relativeSrcCenterX = relativeSrcCenterX;
+                _relativeSrcCenterY = relativeSrcCenterY;
+
+                LimitRelativeSrcCenter();
+                Update();
+            }
+
             private Size _imageSize;
             private Size _clientSize;
 
@@ -45,6 +55,8 @@ namespace ImageViewerWindowsFormsApplication
             // image2client pixel resize factor; <1: multiple pixels are drawn in one pixel; >1 pixel are enlarged
             public double ZoomFactor => _zoomFactor;
             public double RelativeZoomFactor => Math.Max(_relativeZoomFactorRaw, MinimumRelativeZoomFactor);
+            public double RelativeSrcCenterX => _relativeSrcCenterX;
+            public double RelativeSrcCenterY => _relativeSrcCenterY;
 
             public bool IsValid => _zoomFactor > 0 && MinimumRelativeZoomFactor < 1;
             public bool IsActive => IsValid && RelativeZoomFactor < 1;
@@ -401,7 +413,7 @@ namespace ImageViewerWindowsFormsApplication
             if (_image == null || !_transform.UpdateSizes(_image.Size, this.ClientSize))
                 return;
 
-            _transform.UpdateZoom(newRelativeZoomFactor, relativeFocusX, relativeFocusY);
+            _transform.Set(newRelativeZoomFactor, relativeFocusX, relativeFocusY);
             this.Invalidate();
         }
 
@@ -575,7 +587,7 @@ namespace ImageViewerWindowsFormsApplication
             base.OnMouseUp(e);
         }
 
-        private struct MouseDragInfo
+        private struct MouseDragLeftInfo
         {
             public Point LastPosition;
             public bool IsValid;
@@ -583,12 +595,22 @@ namespace ImageViewerWindowsFormsApplication
 
             public bool IsFastDrag => IsValid && IsStartedOnZoomAreaVisualization;
         }
-        private MouseDragInfo _dragLeftMouse;
+        private MouseDragLeftInfo _dragLeftMouse;
+
+        private struct MouseDragMiddleInfo
+        {
+            public Point StartPosition;
+            public double StartRelativeZoom;
+            public double StartRelativeSrcCenterX;
+            public double StartRelativeSrcCenterY;
+            public bool IsValid;
+        }
+        private MouseDragMiddleInfo _dragMiddleMouse;
 
         private enum MouseEventType { Move, Up, Down };
         private void TrackDragMouse(MouseEventArgs e, MouseEventType eventType)
         {
-            if ((e.Button & MouseButtons.Left) != 0 && eventType != MouseEventType.Up && _transform.IsActive)
+            if (e.Button == MouseButtons.Left && eventType != MouseEventType.Up && _transform.IsActive)
             {
                 if (_dragLeftMouse.IsValid)
                 {
@@ -635,6 +657,61 @@ namespace ImageViewerWindowsFormsApplication
                 Cursor.Current = Cursors.Default;
 
                 this.Invalidate();
+            }
+
+            if (e.Button == MouseButtons.Middle && eventType != MouseEventType.Up && _transform.IsValid)
+            {
+                if (_dragMiddleMouse.IsValid)
+                {
+                    int y0 = _dragMiddleMouse.StartPosition.Y;
+                    int y = e.Location.Y;
+                    double dragZoomValue = y <= y0
+                        ? y / (double) y0 - 1
+                        : (y - y0) / (double)(this.ClientSize.Height - y0);
+
+                    double min = _transform.MinimumRelativeZoomFactor;
+                    double mid = _dragMiddleMouse.StartRelativeZoom;
+                    // newRelativeZoomFactor = mid * stepIn^(dragZoomValue)
+                    // if dragZoomValue = -1 then newRelativeZoomFactor = min
+                    // min = mid * stepIn^(-1)
+                    // stepIn = mid / min
+                    // if dragZoomValue = 1 then newRelativeZoomFactor = 1
+                    // 1 = mid * stepIn^(1)
+                    // stepIn = 1 / mid
+                    double newRelativeZoomFactor = dragZoomValue < 0
+                        ? mid * Math.Pow(mid / min, dragZoomValue)
+                        : mid * Math.Pow(1 / mid, dragZoomValue);
+
+                    _transform.Set(_dragMiddleMouse.StartRelativeZoom, _dragMiddleMouse.StartRelativeSrcCenterX, _dragMiddleMouse.StartRelativeSrcCenterY);
+                    _transform.UpdateZoom(newRelativeZoomFactor, _dragMiddleMouse.StartPosition);
+
+                    this.Invalidate();
+                }
+                else if (eventType == MouseEventType.Down)
+                {
+                    _dragMiddleMouse.StartPosition = e.Location;
+                    _dragMiddleMouse.StartRelativeZoom = _transform.RelativeZoomFactor;
+                    _dragMiddleMouse.StartRelativeSrcCenterX = _transform.RelativeSrcCenterX;
+                    _dragMiddleMouse.StartRelativeSrcCenterY = _transform.RelativeSrcCenterY;
+                    _dragMiddleMouse.IsValid = true;
+
+                    // limit cursor movement
+                    Rectangle moveArea = this.ClientRectangle;
+                    moveArea.X = e.Location.X;
+                    moveArea.Width = 1;
+                    Cursor.Clip = this.RectangleToScreen(moveArea);
+                    // set move cursor
+                    Cursor.Current = Cursors.SizeNS;
+                }
+            }
+            else if (_dragMiddleMouse.IsValid)
+            {
+                _dragMiddleMouse.IsValid = false;
+
+                // release any limitation of cursor movement
+                Cursor.Clip = new Rectangle();
+                // unset move cursor
+                Cursor.Current = Cursors.Default;
             }
         }
 
