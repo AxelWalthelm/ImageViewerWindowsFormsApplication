@@ -134,8 +134,12 @@ namespace ImageViewerWindowsFormsApplication
 
             public bool UpdateSizes(Size imageSize, Size clientSize)
             {
-                _imageSize = imageSize;
-                _clientSize = clientSize;
+                if (_imageSize != imageSize || _clientSize != clientSize)
+                {
+                    _imageSize = imageSize;
+                    _clientSize = clientSize;
+                    LimitRelativeSrcCenter();
+                }
 
                 return Update();
             }
@@ -180,7 +184,7 @@ namespace ImageViewerWindowsFormsApplication
                 if (_relativeZoomFactorRaw == newRelativeZoomFactor)
                     return;
 
-                Update(); // may be redundant, but let's make sure _src is up to date
+                Update();
                 double focusSrcX = SrcRelative2AbsoluteX(relativeFocusX);
                 double focusSrcY = SrcRelative2AbsoluteY(relativeFocusY);
 
@@ -205,25 +209,25 @@ namespace ImageViewerWindowsFormsApplication
                 Update();
             }
 
-            public void UpdateMove(double dX, double dY)
+            public void UpdateMoveFromClientStep(double clientPixelDeltaX, double clientPixelDeltaY)
             {
-                _relativeSrcCenterX += dX * RelativeZoomFactor;
-                _relativeSrcCenterY += dY * RelativeZoomFactor;
+                _relativeSrcCenterX += clientPixelDeltaX * RelativeZoomFactor;
+                _relativeSrcCenterY += clientPixelDeltaY * RelativeZoomFactor;
 
                 LimitRelativeSrcCenter();
 
                 Update();
             }
 
-            public void UpdateMoveFromClientMove(int clientPixelX, int clientPixelY, double zoomAreaVisualizationSize = 0)
+            public void UpdateMoveFromClientDrag(int clientPixelDeltaX, int clientPixelDeltaY, double zoomAreaVisualizationSize = 0)
             {
                 Update();
 
                 if (zoomAreaVisualizationSize <= 0)
                 {
                     // convert client to image relative
-                    double dX = clientPixelX / (_zoomFactor * (_imageSize.Width - 1));
-                    double dY = clientPixelY / (_zoomFactor * (_imageSize.Height - 1));
+                    double dX = clientPixelDeltaX / (_zoomFactor * (_imageSize.Width - 1));
+                    double dY = clientPixelDeltaY / (_zoomFactor * (_imageSize.Height - 1));
 
                     _relativeSrcCenterX -= dX;
                     _relativeSrcCenterY -= dY;
@@ -250,8 +254,8 @@ namespace ImageViewerWindowsFormsApplication
                     //// re-substitute
                     // dX = clientPixelX / (imageArea.Width * (_imageSize.Width - 1) / _imageSize.Width)
                     // dX = clientPixelX * _imageSize.Width / ((_imageSize.Width - 1) * imageArea.Width)
-                    double dX = clientPixelX * (_imageSize.Width / ((_imageSize.Width - 1) * imageArea.Width));
-                    double dY = clientPixelY * (_imageSize.Height / ((_imageSize.Height - 1) * imageArea.Height));
+                    double dX = clientPixelDeltaX * (_imageSize.Width / ((_imageSize.Width - 1) * imageArea.Width));
+                    double dY = clientPixelDeltaY * (_imageSize.Height / ((_imageSize.Height - 1) * imageArea.Height));
 
                     _relativeSrcCenterX += dX;
                     _relativeSrcCenterY += dY;
@@ -265,18 +269,18 @@ namespace ImageViewerWindowsFormsApplication
             // adust _relativeSrcCenterX/Y so that displayed image does not move outside of client area
             private void LimitRelativeSrcCenter()
             {
-                double radius = RelativeZoomFactor * 0.5;
-                if (_relativeSrcCenterX < radius)
-                    _relativeSrcCenterX = radius;
+                double border = RelativeZoomFactor * 0.5;
+                if (_relativeSrcCenterX < border)
+                    _relativeSrcCenterX = border;
                 else
-                if (_relativeSrcCenterX > 1 - radius)
-                    _relativeSrcCenterX = 1 - radius;
+                if (_relativeSrcCenterX > 1 - border)
+                    _relativeSrcCenterX = 1 - border;
 
-                if (_relativeSrcCenterY < radius)
-                    _relativeSrcCenterY = radius;
+                if (_relativeSrcCenterY < border)
+                    _relativeSrcCenterY = border;
                 else
-                if (_relativeSrcCenterY > 1 - radius)
-                    _relativeSrcCenterY = 1 - radius;
+                if (_relativeSrcCenterY > 1 - border)
+                    _relativeSrcCenterY = 1 - border;
             }
         }
 
@@ -286,10 +290,6 @@ namespace ImageViewerWindowsFormsApplication
         {
             InitializeComponent();
             this.DoubleBuffered = true;
-
-            this.GotFocus += (object sender, EventArgs e) => this.Invalidate();
-            this.LostFocus += (object sender, EventArgs e) => this.Invalidate();
-            this.SizeChanged += (object sender, EventArgs e) => this.Invalidate();
         }
 
         private Image _image;
@@ -352,9 +352,47 @@ namespace ImageViewerWindowsFormsApplication
             set { _zoomVisualization = value; this.Invalidate(); }
         }
 
+        public double RelativeZoom => _transform.RelativeZoomFactor;
+        public double Zoom => _transform.ZoomFactor;
+
+        public void SetRelativeZoom(double newRelativeZoomFactor, double relativeFocusX = 0.5, double relativeFocusY = 0.5)
+        {
+            if (_image == null || !_transform.UpdateSizes(_image.Size, this.ClientSize))
+                return;
+
+            _transform.UpdateZoom(newRelativeZoomFactor, relativeFocusX, relativeFocusY);
+            this.Invalidate();
+        }
+
         protected bool IsZoomVisualization => _image != null && _transform.IsValid && this.ClientSize.Width > 20 && this.ClientSize.Height > 20;
         protected bool IsZoomScaleVisualization => IsZoomVisualization && _zoomVisualization == ZoomVisualizationMode.AreasAndScale;
         protected bool IsZoomAreaVisualization => IsZoomVisualization && _zoomVisualization != ZoomVisualizationMode.Off && (_zoomVisualization != ZoomVisualizationMode.AreasWhenZoomed || _transform.IsActive);
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+
+            if (_image != null)
+            {
+                _transform.UpdateSizes(_image.Size, this.ClientSize);
+            }
+
+            this.Invalidate();
+        }
+
+        protected override void OnGotFocus(EventArgs e)
+        {
+            base.OnGotFocus(e);
+
+            this.Invalidate();
+        }
+
+        protected override void OnLostFocus(EventArgs e)
+        {
+            base.OnLostFocus(e);
+
+            this.Invalidate();
+        }
 
         protected override void OnPaintBackground(PaintEventArgs pe)
         {
@@ -516,7 +554,7 @@ namespace ImageViewerWindowsFormsApplication
 
                     if (dX != 0 || dY != 0)
                     {
-                        _transform.UpdateMoveFromClientMove(dX, dY, _dragLeftMouse.IsFastDrag ? _zoomAreaVisualizationSize : 0);
+                        _transform.UpdateMoveFromClientDrag(dX, dY, _dragLeftMouse.IsFastDrag ? _zoomAreaVisualizationSize : 0);
 
                         this.Invalidate();
                     }
@@ -840,7 +878,7 @@ namespace ImageViewerWindowsFormsApplication
                 _transform.UpdateZoom(0.25);
 
             double speed = GetMoveSpeed(modifiers);
-            _transform.UpdateMove(dX * speed, dY * speed);
+            _transform.UpdateMoveFromClientStep(dX * speed, dY * speed);
         }
     }
 }
